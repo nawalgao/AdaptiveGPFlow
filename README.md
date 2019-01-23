@@ -9,7 +9,7 @@ using [GPflow](https://github.com/GPflow/GPflow), and uses [TensorFlow](http://w
 We present a package for implementing fully non-stationary Gaussian process regression (GPR), where all three key parameters – noise variance, signal variance and lengthscale – can be simultaneously input-dependent [paper](https://arxiv.org/pdf/1508.04319.pdf).
 
 
-It is currently maintained by [Nimish Awalgaonkar](https://www.predictivesciencelab.org/people.html).
+It is currently maintained by [Nimish Awalgaonkar and Piyush Pandita](https://www.predictivesciencelab.org/people.html).
 
 # Install
 This package was written in `Python 2.7.14`. It is recommended to use the `Anaconda >=5.0.1` distribution, on a empty environment. The package is built on top of `gpflow 0.4.0` which has to be installed from [source]( https://github.com/GPflow/GPflow/releases/tag/0.4.0).
