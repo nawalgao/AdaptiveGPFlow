@@ -19,8 +19,7 @@ conda install numpy scipy matplotlib
 ```
 
 # Usage Example
-Please check out the notebooks folder for working example and how you can use this framework by simply plugging in your data.
-
+Please check out the notebooks folder for working examples.
 # Contributing
 If you are interested in contributing to this open source project, contact us through an issue on this repository.
 
