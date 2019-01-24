@@ -1,7 +1,7 @@
 # AdaptiveGPFlow
 Non stationary Gaussian Process (with Heterscedastic Noise)
 
-**WARNING: This package will be updated in near future.**
+**WARNING: This package is still under construction (with limited functionality) and will be updated in near future.**
 
 AdaptiveGPFlow is a python package (released under [MIT License](https://github.com/nawalgao/GPPrefElicit/blob/master/LICENSE)) for modeling non-stationary Gaussian Processes (with Heterscedastic noise)
 using [GPflow](https://github.com/GPflow/GPflow), and uses [TensorFlow](http://www.tensorflow.org).
