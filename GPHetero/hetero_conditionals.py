@@ -90,7 +90,7 @@ def conditional(Xnew, X, kern, f, full_cov=False, q_sqrt=None, whiten=False):
     return fmean, fvar
 
 @NameScoped("nonstat_conditional")
-def nonstat_conditional(Xnew, X, NonStatLRBF, kern1, v1, v2):
+def nonstat_conditional(Xnew, X, nonstat, kern1, v1, v2):
     """
     Given F, representing the nonstationary GP (variable lengthscale) at the points X, produce the mean and
     (co-)variance of the GP at the points Xnew.
@@ -120,15 +120,15 @@ def nonstat_conditional(Xnew, X, NonStatLRBF, kern1, v1, v2):
     Len = tf.matmul(L_GP_Lm, v1)
     Lexp = tf.exp(Len)
     
-    NonStat_Kmn = NonStatLRBF.K(X, Lexp, Xnew, l_mu_new_exp)
-    NonStat_Kmm = NonStatLRBF.K(X, Lexp, X, Lexp) + tf.eye(num_data, dtype=float_type) * settings.numerics.jitter_level
+    NonStat_Kmn = nonstat.K(X, Lexp, Xnew, l_mu_new_exp)
+    NonStat_Kmm = nonstat.K(X, Lexp, X, Lexp) + tf.eye(num_data, dtype=float_type) * settings.numerics.jitter_level
     NonStat_Lm = tf.cholesky(NonStat_Kmm)
     
     # Compute the projection matrix A
     NonStat_A = tf.matrix_triangular_solve(NonStat_Lm, NonStat_Kmn, lower = True)
      
     # compute the covariance due to the conditioning
-    NonStat_fvar = NonStatLRBF.K(Xnew, l_mu_new_exp, Xnew, l_mu_new_exp) - tf.matmul(NonStat_A, NonStat_A, transpose_a=True)
+    NonStat_fvar = nonstat.K(Xnew, l_mu_new_exp, Xnew, l_mu_new_exp) - tf.matmul(NonStat_A, NonStat_A, transpose_a=True)
     #NonStat_shape = tf.stack([num_func, 1, 1])
     #NonStat_fvar = tf.tile(tf.expand_dims(NonStat_fvar, 0), NonStat_shape)  # K x N x N or K x N
 

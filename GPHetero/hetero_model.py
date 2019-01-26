@@ -149,6 +149,7 @@ class GPModelHeteroNoiseRegression(Model):
         at the points `Xnew`.
         """
         return self.build_predict_n(Xnew)
+ 
     
 class GPModelAdaptive(Model):
     """
@@ -187,6 +188,7 @@ class GPModelAdaptive(Model):
         """
         return self.build_predict_n(Xnew)
 
+
 class GPModelAdaptiveLengthscale(Model):
     """
     A base class for adaptive GP (non-stationary lengthscale and signal variance)
@@ -216,6 +218,54 @@ class GPModelAdaptiveLengthscale(Model):
         at the points `Xnew`.
         """
         return self.build_predict_l(Xnew)
+    
+    @AutoFlow((float_type, [None, None]))
+    def predict_f(self, Xnew):
+        """
+        Compute the mean and variance of the latent function(s)
+        at the points `Xnew`.
+        """
+        return self.build_predict_f(Xnew)
+
+
+class GPModelAdaptLAdaptN(Model):
+    """
+    A base class for adaptive GP (non-stationary lengthscale and signal variance)
+    regression models with heteroscedastic noise,
+    wherein, noise is represented by a latent GP N(.)
+    """
+    def __init__(self, X, Y, kern1, kern2, nonstat, name='adapt_ll_noise_gps'):
+        Model.__init__(self, name)
+        self.signal_variance = Param(1.0, transforms.positive)
+        self.kern1, self.kern2 = kern1, kern2
+        self.nonstat = nonstat
+        self.likelihood = GaussianHeteroNoise()
+        
+        if isinstance(X, np.ndarray):
+            #: X is a data matrix; each row represents one instance
+            X = DataHolder(X)
+        if isinstance(Y, np.ndarray):
+            #: Y is a data matrix, rows correspond to the rows in X, columns are treated independently
+            Y = DataHolder(Y)
+        
+        self.X, self.Y = X, Y
+        self._session = None
+    
+    @AutoFlow((float_type, [None, None]))
+    def predict_l(self, Xnew):
+        """
+        Compute the mean and variance of the latent function(s)
+        at the points `Xnew`.
+        """
+        return self.build_predict_l(Xnew)
+    
+    @AutoFlow((float_type, [None, None]))
+    def predict_n(self, Xnew):
+        """
+        Compute the mean and variance of the latent function(s)
+        at the points `Xnew`.
+        """
+        return self.build_predict_n(Xnew)
     
     @AutoFlow((float_type, [None, None]))
     def predict_f(self, Xnew):

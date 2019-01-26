@@ -1,4 +1,3 @@
-
 from __future__ import print_function, absolute_import
 from functools import reduce
 
@@ -14,7 +13,6 @@ from gpflow.quadrature import hermgauss, mvhermgauss, mvnquad
 float_type = settings.dtypes.float_type
 int_type = settings.dtypes.int_type
 np_float_type = np.float32 if float_type is tf.float32 else np.float64
-
 
 
 class Stationary(Kern):
@@ -93,8 +91,6 @@ class RBF(Stationary):
         return self.K(X1, X2)
     
     
-
-
 class NonStationaryRBF(Kern):
     """
     Non-stationary 1D RBF kernel
@@ -103,7 +99,7 @@ class NonStationaryRBF(Kern):
     """
     def __init__(self):
         Kern.__init__(self, input_dim = 1, active_dims= [0])
-        #self.signal_variance = Param(1.0, transform=transforms.positive)
+        self.signal_variance = Param(1.0, transform=transforms.positive)
         
     def K(self, X1, Lexp1, Sexp1, X2, Lexp2, Sexp2):
         """
@@ -127,15 +123,16 @@ class NonStationaryRBF(Kern):
     def compute_K(self, X1, Lexp1, Sexp1, X2, Lexp2, Sexp2):
         return self.K(X1, Lexp1, Sexp1, X2, Lexp2, Sexp2)
 
+
 class NonStationaryLengthscaleRBF(Kern):
     """
     Non-stationary 1D RBF kernel
     For more info refer to paper:
         https://arxiv.org/abs/1508.04319
     """
-    def __init__(self, signal_variance):
+    def __init__(self):
         Kern.__init__(self, input_dim = 1, active_dims= [0])
-        self.signal_variance = signal_variance
+        self.signal_variance = Param(1.0, transform=transforms.positive)
         
     def K(self, X1, Lexp1, X2, Lexp2):
         """
@@ -164,9 +161,9 @@ def is_pos_def(x):
 
 if __name__ == '__main__':
     import numpy as np
-    A = np.arange(2,4)[:,None]
-    B = np.arange(10,20)[:,None]
-    C = np.arange(10,20)[:,None]
+    A = np.arange(1,100)[:,None]
+    B = np.arange(1,100)[:,None]
+    C = np.arange(1,100)[:,None]
     
     Cov = NonStationaryRBF()
     r = Cov.compute_K(A,A,A,A,A,A)
