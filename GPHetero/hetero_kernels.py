@@ -151,7 +151,6 @@ class NonStationaryLengthscaleRBF(Kern):
         #return dist_sqr, l_sqr, l_2_prod , var_prod, cov
     
     @AutoFlow((float_type, [None, None]), (float_type, [None, None]),
-              (float_type, [None, None]), (float_type, [None, None]),
               (float_type, [None, None]), (float_type, [None, None]))
     def compute_K(self, X1, Lexp1, X2, Lexp2):
         return self.K(X1, Lexp1, X2, Lexp2)
@@ -161,11 +160,11 @@ def is_pos_def(x):
 
 if __name__ == '__main__':
     import numpy as np
-    A = np.arange(1,100)[:,None]
+    A = np.arange(2,3)[:,None]
     B = np.arange(1,100)[:,None]
     C = np.arange(1,100)[:,None]
     
-    Cov = NonStationaryRBF()
-    r = Cov.compute_K(A,A,A,A,A,A)
+    Cov = NonStationaryLengthscaleRBF()
+    r = Cov.compute_K(A,A,A,A)
     
     

@@ -325,11 +325,11 @@ class GPMCAdaptiveLengthscale(GPModelAdaptiveLengthscale):
     with
     NonStatL NonStatL^T = NonStatK
     """
-    def __init__(self, X, Y, kern1):
+    def __init__(self, X, Y, kern1, nonstat):
     
         X = DataHolder(X, on_shape_change='recompile')
         Y = DataHolder(Y, on_shape_change='recompile')
-        GPModelAdaptiveLengthscale.__init__(self, X, Y, kern1)
+        GPModelAdaptiveLengthscale.__init__(self, X, Y, kern1, nonstat)
     
         self.num_data = X.shape[0]
         self.num_latent = Y.shape[1]
@@ -373,8 +373,7 @@ class GPMCAdaptiveLengthscale(GPModelAdaptiveLengthscale):
         self.Lexp = tf.exp(L)
         
         # Non stationary kernel
-        self.NonStatLRBF = NonStationaryLengthscaleRBF(self.signal_variance)
-        Knonstat = self.NonStatLRBF.K(self.X, self.Lexp, self.X, self.Lexp)
+        Knonstat = self.nonstat.K(self.X, self.Lexp, self.X, self.Lexp)
         Lnonstat = tf.cholesky(Knonstat + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
         F = tf.matmul(Lnonstat, self.V2)
         
@@ -410,7 +409,7 @@ class GPMCAdaptiveLengthscale(GPModelAdaptiveLengthscale):
 
         """
         mu, var = nonstat_conditional(Xnew, self.X,
-                                      self.NonStatLRBF, self.kern1,
+                                      self.nonstat, self.kern1,
                                       self.V1, self.V2)
         return mu, var
     

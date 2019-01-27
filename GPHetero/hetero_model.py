@@ -195,10 +195,10 @@ class GPModelAdaptiveLengthscale(Model):
     regression models with heteroscedastic noise,
     wherein, noise is represented by a latent GP N(.)
     """
-    def __init__(self, X, Y, kern1, name='adaptive_lengthscale_gp'):
+    def __init__(self, X, Y, kern1, nonstat, name='adaptive_lengthscale_gp'):
         Model.__init__(self, name)
-        self.signal_variance = Param(1.0, transforms.positive)
         self.kern1 = kern1
+        self.nonstat = nonstat
         self.likelihood = Gaussian()
         
         if isinstance(X, np.ndarray):
