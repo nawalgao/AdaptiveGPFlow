@@ -160,7 +160,7 @@ def is_pos_def(x):
 
 if __name__ == '__main__':
     import numpy as np
-    A = np.arange(2,3)[:,None]
+    A = np.arange(2,100)[:,None]
     B = np.arange(1,100)[:,None]
     C = np.arange(1,100)[:,None]
     

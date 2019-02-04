@@ -298,9 +298,8 @@ class GPMCAdaptive(GPModelAdaptive):
         # Non stationary kernel
         NonStatRBF = NonStationaryRBF()
         Knonstat = NonStatRBF.K(self.X, Lexp, Sexp, self.X, Lexp, Sexp)
-        Lnonstat = tf.cholesky(Knonstat + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
+        Lnonstat = tf.cholesky(Knonstat + tf.eye(tf.shape(self.X)[0], dtype=float_type) * 1e-4)
         F = tf.matmul(Lnonstat, self.V4)
-        
         return tf.reduce_sum(self.likelihood.logp(F, N, self.Y))
     
 
@@ -374,7 +373,7 @@ class GPMCAdaptiveLengthscale(GPModelAdaptiveLengthscale):
         
         # Non stationary kernel
         Knonstat = self.nonstat.K(self.X, self.Lexp, self.X, self.Lexp)
-        Lnonstat = tf.cholesky(Knonstat + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
+        Lnonstat = tf.cholesky(Knonstat + tf.eye(tf.shape(self.X)[0], dtype=float_type)*1e-4)
         F = tf.matmul(Lnonstat, self.V2)
         
         return tf.reduce_sum(self.likelihood.logp(F, self.Y))
@@ -396,7 +395,7 @@ class GPMCAdaptiveLengthscale(GPModelAdaptiveLengthscale):
                               q_sqrt=None, whiten=True)
         return mu, var
     
-    def build_predict_f(self, Xnew, full_cov=False):
+    def build_predict_f(self, Xnew, full_cov=True):
         """
         Predict GP F(.) at new points Xnew
         Xnew is a data matrix, point at which we want to predict
@@ -410,7 +409,7 @@ class GPMCAdaptiveLengthscale(GPModelAdaptiveLengthscale):
         """
         mu, var = nonstat_conditional(Xnew, self.X,
                                       self.nonstat, self.kern1,
-                                      self.V1, self.V2)
+                                      self.V1, self.V2, full_cov)
         return mu, var
     
 
@@ -539,7 +538,7 @@ class GPMCAdaptLAdaptN(GPModelAdaptLAdaptN):
         
         return mu, var
     
-    def build_predict_f(self, Xnew, full_cov=False):
+    def build_predict_f(self, Xnew, full_cov=True):
         """
         Predict GP F(.) at new points Xnew
         Xnew is a data matrix, point at which we want to predict
@@ -553,7 +552,7 @@ class GPMCAdaptLAdaptN(GPModelAdaptLAdaptN):
         """
         mu, var = nonstat_conditional(Xnew, self.X,
                                       self.nonstat, self.kern1,
-                                      self.V1, self.V3)
+                                      self.V1, self.V3, full_cov)
         return mu, var
     
     
