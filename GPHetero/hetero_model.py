@@ -131,6 +131,7 @@ class GPModelHeteroNoiseRegression(Model):
             #: Y is a data matrix, rows correspond to the rows in X, columns are treated independently
             Y = DataHolder(Y)
         
+        self.likelihood._check_targets(Y.value)
         self.X, self.Y = X, Y
         self._session = None
     
@@ -169,6 +170,7 @@ class GPModelAdaptive(Model):
             #: Y is a data matrix, rows correspond to the rows in X, columns are treated independently
             Y = DataHolder(Y)
         
+        self.likelihood._check_targets(Y.value)
         self.X, self.Y = X, Y
         self._session = None
     
@@ -208,6 +210,7 @@ class GPModelAdaptiveLengthscale(Model):
             #: Y is a data matrix, rows correspond to the rows in X, columns are treated independently
             Y = DataHolder(Y)
         
+        self.likelihood._check_targets(Y.value)
         self.X, self.Y = X, Y
         self._session = None
     
@@ -226,6 +229,22 @@ class GPModelAdaptiveLengthscale(Model):
         at the points `Xnew`.
         """
         return self.build_predict_f(Xnew)
+     
+    @AutoFlow((float_type, [None, None]), (tf.int32, []))
+    def predict_f_samples(self, Xnew, num_samples):
+        """
+        Produce samples from the posterior latent function(s) at the points
+        Xnew.
+        """
+        mu, var = self.build_predict_f(Xnew, full_cov=True)
+        jitter = tf.eye(tf.shape(mu)[0], dtype=float_type) * settings.numerics.jitter_level
+        samples = []
+        for i in range(self.num_latent):
+            L = tf.cholesky(var[:, :, i] + jitter)
+            shape = tf.stack([tf.shape(L)[0], num_samples])
+            V = tf.random_normal(shape, dtype=settings.dtypes.float_type)
+            samples.append(mu[:, i:i + 1] + tf.matmul(L, V))
+        return tf.transpose(tf.stack(samples))
 
 
 class GPModelAdaptLAdaptN(Model):
@@ -248,6 +267,7 @@ class GPModelAdaptLAdaptN(Model):
             #: Y is a data matrix, rows correspond to the rows in X, columns are treated independently
             Y = DataHolder(Y)
         
+        self.likelihood._check_targets(Y.value)
         self.X, self.Y = X, Y
         self._session = None
     
@@ -274,6 +294,22 @@ class GPModelAdaptLAdaptN(Model):
         at the points `Xnew`.
         """
         return self.build_predict_f(Xnew)
+    
+    @AutoFlow((float_type, [None, None]), (tf.int32, []))
+    def predict_f_samples(self, Xnew, num_samples):
+        """
+        Produce samples from the posterior latent function(s) at the points
+        Xnew.
+        """
+        mu, var = self.build_predict_f(Xnew, full_cov=True)
+        jitter = tf.eye(tf.shape(mu)[0], dtype=float_type) * settings.numerics.jitter_level
+        samples = []
+        for i in range(self.num_latent):
+            L = tf.cholesky(var[:, :, i] + jitter)
+            shape = tf.stack([tf.shape(L)[0], num_samples])
+            V = tf.random_normal(shape, dtype=settings.dtypes.float_type)
+            samples.append(mu[:, i:i + 1] + tf.matmul(L, V))
+        return tf.transpose(tf.stack(samples))
 
 
         
