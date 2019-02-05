@@ -2,6 +2,7 @@
 import numpy as np
 import tensorflow as tf
 from .hetero_model import GPModel,GPModelHeteroNoiseRegression, GPModelAdaptive, GPModelAdaptiveLengthscale, GPModelAdaptLAdaptN
+from .hetero_model import GPModelAdaptLAdaptNMultiD
 from gpflow.param import Param, DataHolder
 from .hetero_conditionals import conditional, nonstat_conditional
 from .hetero_kernels import NonStationaryRBF, NonStationaryLengthscaleRBF
@@ -484,7 +485,7 @@ class GPMCAdaptLAdaptN(GPModelAdaptLAdaptN):
         Construct a tf function to compute the likelihood of an adaptive GP
         model (non-stationary lengthscale whose 
         log is represented using latent GP L(.)).
-        \log p(Y, V1| theta).
+        \log p(Y, V1, V2| theta).
         """
         
         K1 = self.kern1.K(self.X)
@@ -554,10 +555,99 @@ class GPMCAdaptLAdaptN(GPModelAdaptLAdaptN):
                                       self.nonstat, self.kern1,
                                       self.V1, self.V3, full_cov)
         return mu, var
+
+
+    
+class GPMCAdaptLAdaptNMultiD(GPModelAdaptLAdaptNMultiD):
+    """ 
+    X is a data matrix, size N x D
+    Y is a data matrix, size N x 1
+    kern1, kern2  are appropriate GPflow objects
+    kern1: covariance function associated with adaptive lengthscale whose log is represented using GP L(.)
+    kern2: covariance function associated with adaptive heteroscedastic noise whose log is represented using GP N(.)
     
     
+    This is a vanilla implementation of an adaptive GP (non-stationary lengthscale) 
+    with a Gaussian likelihood (multi-dimension)
+    
+    v1 ~ N(0, I)
+    l = L1v1 
+    with
+    L1 L1^T = K1 and 
+    
+    v2 ~ N(0, I)
+    n = L2v2
+    with
+    L2 L2^T = K2
+    
+    v3 ~ N(0, I)
+    f = NonStatLv3
+    with
+    NonStatL NonStatL^T = NonStatK
+    """ 
+    def __init__(self, X, Y, kern1_list, kern2, nonstat,
+                 num_latent=None, ARD = False):
         
-    
+        X = DataHolder(X, on_shape_change='recompile')
+        Y = DataHolder(Y, on_shape_change='recompile')
+        GPModelAdaptLAdaptNMultiD.__init__(self, X, Y, kern1_list, kern2, nonstat)
+        self.num_data = X.shape[0]
+        self.num_latent = num_latent or Y.shape[1]
+        self.num_feat = X.shape[1]
+        
+        # Standard normal dist for num_feat L(.) GP
+        self.V1 = Param(np.zeros((self.num_data, self.num_feat)))
+        self.V1.prior = Gaussian(0., 1.)
+        # Standard normal dist for num_feat N(.) GP
+        self.V2 = Param(np.zeros((self.num_data, self.num_latent)))
+        self.V2.prior = Gaussian(0., 1.)
+        # Standard normal dist for NonStat F(.) GP
+        self.V3 = Param(np.zeros((self.num_data, self.num_latent)))
+        self.V3.prior = Gaussian(0., 1.)
+
+    def compile(self, session=None, graph=None, optimizer=None):
+        """
+        Before calling the standard compile function, check to see if the size
+        of the data has changed and add parameters appropriately.
+
+        This is necessary because the shape of the parameters depends on the
+        shape of the data.
+        """
+        if not self.num_data == self.X.shape[0]:
+            self.num_data = self.X.shape[0]
+            self.V1 = Param(np.zeros((self.num_data, self.num_feat)))
+            self.V1.prior = Gaussian(0., 1.)
+            self.V2 = Param(np.zeros((self.num_data, self.num_latent)))
+            self.V2.prior = Gaussian(0., 1.)
+            self.V3 = Param(np.zeros((self.num_data, self.num_latent)))
+            self.V3.prior = Gaussian(0., 1.)
+        
+        return super(GPModelAdaptLAdaptNMultiD, self).compile(session=session,
+                    graph=graph, optimizer=optimizer)
+
+    def build_likelihood(self):  
+        """
+        Construct a tf function to compute the likelihood of an adaptive GP
+        model (non-stationary lengthscale whose 
+        log is represented using latent GP L(.)).
+        \log p(Y, V1mat, V2mat| theta).
+        """
+        #Lexp_mat = tf.constant(0, shape=[self.num_data,self.num_feat])
+        self.Lexpmat = tf.placeholder(shape = [self.num_data,self.num_feat], dtype=tf.float32)
+        for i in xrange(self.num_feat):
+            K1 = self.kern1_list[i].K(self.X[:,i])
+            L1 = tf.cholesky(K1 + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
+            L = tf.matmul(L1, self.V1[:,i])
+            Lexp = tf.exp(L)
+            self.Lexpmat[:,i] = Lexp
+            
+        
+        K2 = self.kern2.K(self.X)
+        L2 = tf.cholesky(K2 + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
+        N = tf.matmul(L2, self.V2)
+        
+       
+        
     
     
     

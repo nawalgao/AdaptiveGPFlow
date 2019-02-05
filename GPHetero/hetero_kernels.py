@@ -3,7 +3,7 @@ from functools import reduce
 
 import tensorflow as tf
 import numpy as np
-
+import gpflow
 from gpflow.param import Param, Parameterized, AutoFlow
 from gpflow.kernels import Kern
 from gpflow import transforms
@@ -75,22 +75,6 @@ class Stationary(Kern):
         return tf.fill(tf.stack([tf.shape(X)[0]]), tf.squeeze(self.variance))
 
 
-class RBF(Stationary):
-    """
-    The radial basis function (RBF) or squared exponential kernel
-    """
-
-    def K(self, X, X2=None, presliced=False):
-        if not presliced:
-            X, X2 = self._slice(X, X2)
-        return self.variance * tf.exp(-self.square_dist(X, X2) / 2)
-    
-    @AutoFlow((float_type, [None, None]), (float_type, [None, None]),
-              (float_type, [None, None]), (float_type, [None, None]))
-    def compute_K(self, X1, X2):
-        return self.K(X1, X2)
-    
-    
 class NonStationaryRBF(Kern):
     """
     Non-stationary 1D RBF kernel
@@ -155,6 +139,51 @@ class NonStationaryLengthscaleRBF(Kern):
     def compute_K(self, X1, Lexp1, X2, Lexp2):
         return self.K(X1, Lexp1, X2, Lexp2)
 
+class NonStatLRBFMultiD(NonStationaryLengthscaleRBF):
+    """
+    Non stationary covariance for multi-dimensions
+    """
+    def __init__(self):
+        NonStationaryLengthscaleRBF.__init__(self)
+    
+    def K(self, X1, Lexp1, X2, Lexp2):
+        """
+        X1, X2 : input points
+        Lexp1 and Sexp1 are exponential of latent GPs 
+        L1(.) representing log of non-stationary lengthscale values at points X1.
+        S1(.) representing log of non-stationary signal variance values at points X1.
+        """
+        dist_sqr = tf.square(X1 - tf.transpose(X2))
+        l_sqr = tf.square(Lexp1) + tf.square(tf.transpose(Lexp2))
+        l_2_prod = 2 * Lexp1 * tf.transpose(Lexp2)
+        #var_prod = Sexp1 * tf.transpose(Sexp2)
+        var_prod = self.signal_variance
+        cov = var_prod * tf.sqrt(l_2_prod/l_sqr) * tf.exp(-1 * dist_sqr/l_sqr)
+        return cov
+    
+    def Ka(self, X1mat, Lexpmat1, X2mat, Lexpmat2):
+        """
+        X1mat, X2mat : input feature matrix (N X D)
+        Lexpmat1, Lexpmat2 : latent lengthscale maatrix (N X D)
+        Lexpmat1 : representing log of non-stat lengthscale values for each dimension of X1
+        """
+        num_feat = X1mat.shape[1]
+        num_data = X1mat.shape[0]
+        covmat = tf.placeholder(shape = [num_data, num_data, num_feat], dtype=tf.float32)
+        for i in xrange(num_feat):
+            cov = self.K(X1mat[:,i], Lexpmat1[:,i], X2mat[:,i], Lexpmat1[:,i])
+            covmat[:,:,i] = cov
+        return covmat
+     
+    @AutoFlow((float_type, [None, None]), (float_type, [None, None]),
+              (float_type, [None, None]), (float_type, [None, None]))
+    def compute_Ka(self, X1, Lexp1, X2, Lexp2):
+        return self.K(X1mat, Lexpmat1, Xmat2, Lexpmat2)
+            
+        
+        
+    
+
 def is_pos_def(x):
     return np.all(np.linalg.eigvals(x) > 0)
 
@@ -164,7 +193,11 @@ if __name__ == '__main__':
     B = np.arange(1,100)[:,None]
     C = np.arange(1,100)[:,None]
     
-    Cov = NonStationaryLengthscaleRBF()
-    r = Cov.compute_K(A,A,A,A)
+    Cov = NonStatLRBFMultiD()
+    #r = Cov.compute_K(A,A,A,A)
+    X = np.random.rand(3,2)
+    #K = gpflow.kernels.RBF(input_dim = 2, ARD = True)
+    a = Cov.compute_K(X, X, X, X)
+    
     
     
