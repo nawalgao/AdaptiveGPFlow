@@ -799,19 +799,19 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         """
        
         K1 = self.kern1.K(self.X1)
-        L1 = tf.cholesky(K1 + tf.eye(tf.shape(self.X1)[0], dtype=float_type)*settings.numerics.jitter_level)
+        L1 = tf.cholesky(K1 + tf.eye(tf.shape(self.X1)[0], dtype=float_type)*1e-4)
         Ls1 = tf.matmul(L1, self.V1)
         self.Lexp1 = tf.exp(Ls1)
         
         K2 = self.kern2.K(self.X2)
-        L2 = tf.cholesky(K2 + tf.eye(tf.shape(self.X2)[0], dtype=float_type)*settings.numerics.jitter_level)
+        L2 = tf.cholesky(K2 + tf.eye(tf.shape(self.X2)[0], dtype=float_type)*1e-4)
         Ls2 = tf.matmul(L2, self.V2)
         self.Lexp2 = tf.exp(Ls2)
         
         Knonstat1 = self.nonstat.K(self.X1, self.Lexp1, self.X1, self.Lexp1)
         Knonstat2 = self.nonstat.K(self.X2, self.Lexp2, self.X2, self.Lexp2)
         Knonstat = Knonstat1*Knonstat2
-        Lnonstat = tf.cholesky(Knonstat + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
+        Lnonstat = tf.cholesky(Knonstat + tf.eye(tf.shape(self.X)[0], dtype=float_type)*1e-4)
         self.F = tf.matmul(Lnonstat, self.V4)
         
         return tf.reduce_sum(self.likelihood.logp(self.F, self.Y))
