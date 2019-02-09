@@ -146,4 +146,73 @@ def nonstat_conditional(Xnew, X, nonstat, kern1, v1, v2, full_cov = True):
     NonStat_fvar = tf.transpose(NonStat_fvar)  # N x K or N x N x K
     
     return NonStat_fmean, NonStat_fvar
+
+
+
+@NameScoped("nonstat_conditional2D")
+def nonstat_conditional2D(Xnew, X, nonstat, kern1, kern2, v1, v2, v4, full_cov = True):
+    """
+    Given F, representing the nonstationary GP (variable lengthscale) at the points X, produce the mean and
+    (co-)variance of the GP at the points Xnew.
+    """
     
+    # compute kernel stuff
+    num_data = tf.shape(X)[0]  # M
+    num_func = 1  # only one output GP
+    X1 = X[:,0]
+    X2 = X[:,1]
+    Xn1 = Xnew[:,0]
+    Xn2 = Xnew[:,1]
+    
+    
+    L_GP_Kmn1 = kern1.K(X1, Xn1)
+    L_GP_Kmm1 = kern1.K(X1) + tf.eye(num_data, dtype=float_type) * settings.numerics.jitter_level
+    L_GP_Lm1 = tf.cholesky(L_GP_Kmm1)
+     # Compute the projection matrix A
+    L_GP_A1 = tf.matrix_triangular_solve(L_GP_Lm1, L_GP_Kmn1, lower=True)
+    L_GP_fvar1 = kern1.Kdiag(Xn1) - tf.reduce_sum(tf.square(L_GP_A1), 0)
+    shape = tf.stack([num_func, 1])
+    L_GP_fvar1 = tf.tile(tf.expand_dims(L_GP_fvar1, 0), shape)  # K x N x N or K x N
+    # construct the conditional mean
+    L_GP_fmean1 = tf.matmul(L_GP_A1, v1, transpose_a=True)
+    l_mu_new_exp1 = tf.exp(L_GP_fmean1)
+    L_GP_fvar1 = tf.transpose(L_GP_fvar1)  # N x K or N x N x K
+    # Compute non-stationary kernel stuff
+    Len1 = tf.matmul(L_GP_Lm1, v1)
+    Lexp1 = tf.exp(Len1)
+    
+    
+    L_GP_Kmn2 = kern2.K(X2, Xn2)
+    L_GP_Kmm2 = kern2.K(X2) + tf.eye(num_data, dtype=float_type) * settings.numerics.jitter_level
+    L_GP_Lm2 = tf.cholesky(L_GP_Kmm2)
+     # Compute the projection matrix A
+    L_GP_A2 = tf.matrix_triangular_solve(L_GP_Lm2, L_GP_Kmn2, lower=True)
+    L_GP_fvar2 = kern2.Kdiag(Xn2) - tf.reduce_sum(tf.square(L_GP_A2), 0)
+    shape = tf.stack([num_func, 1])
+    L_GP_fvar2 = tf.tile(tf.expand_dims(L_GP_fvar2, 0), shape)  # K x N x N or K x N
+    # construct the conditional mean
+    L_GP_fmean2 = tf.matmul(L_GP_A2, v2, transpose_a=True)
+    l_mu_new_exp2 = tf.exp(L_GP_fmean2)
+    L_GP_fvar2 = tf.transpose(L_GP_fvar2)  # N x K or N x N x K
+    # Compute non-stationary kernel stuff
+    Len2 = tf.matmul(L_GP_Lm2, v2)
+    Lexp2 = tf.exp(Len2)
+    
+    
+    
+    NonStat_Kmn = nonstat.K(X1, Lexp1, Xn1, l_mu_new_exp1) * nonstat.K(X2, Lexp2, Xn2, l_mu_new_exp2)
+    NonStat_Kmm = nonstat.K(X1, Lexp1, X1, Lexp1)*nonstat.K(X2, Lexp2, X2, Lexp2) + tf.eye(num_data, dtype=float_type) * settings.numerics.jitter_level
+    NonStat_Lm = tf.cholesky(NonStat_Kmm)
+    
+    # Compute the projection matrix A
+    NonStat_A = tf.matrix_triangular_solve(NonStat_Lm, NonStat_Kmn, lower = True)
+    
+    # compute the covariance due to the conditioning
+    if full_cov:
+        NonStat_fvar = nonstat.K(Xnew, l_mu_new_exp, Xnew, l_mu_new_exp) - tf.matmul(NonStat_A, NonStat_A, transpose_a=True)
+        shape = tf.stack([num_func, 1, 1])
+    else:
+        ValueError("Need to work with full covariance")
+    
+     
+   
