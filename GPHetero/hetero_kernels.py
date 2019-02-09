@@ -74,7 +74,6 @@ class Stationary(Kern):
     def Kdiag(self, X, presliced=False):
         return tf.fill(tf.stack([tf.shape(X)[0]]), tf.squeeze(self.variance))
 
-
 class NonStationaryRBF(Kern):
     """
     Non-stationary 1D RBF kernel

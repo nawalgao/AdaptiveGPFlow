@@ -311,6 +311,71 @@ class GPModelAdaptLAdaptN(Model):
             samples.append(mu[:, i:i + 1] + tf.matmul(L, V))
         return tf.transpose(tf.stack(samples))
 
+class GPModelAdaptLAdaptN2D(Model):
+    """
+    A base class for adaptive GP (non-stationary lengthscale and signal variance)
+    regression models with heteroscedastic noise,
+    wherein, noise is represented by a latent GP N(.)
+    """
+    def __init__(self, X, Y, kern1, kern2, noisekern, nonstat, name='adaptive_lengthscale_gp2D'):
+        Model.__init__(self, name)
+        self.kern1 = kern1
+        self.kern2 = kern2
+        self.noisekern = noisekern
+        self.nonstat = nonstat
+        self.likelihood = Gaussian()
+        
+        if isinstance(X, np.ndarray):
+            #: X is a data matrix; each row represents one instance
+            X = DataHolder(X)
+        if isinstance(Y, np.ndarray):
+            #: Y is a data matrix, rows correspond to the rows in X, columns are treated independently
+            Y = DataHolder(Y)
+        
+        self.likelihood._check_targets(Y.value)
+        self.X, self.Y = X, Y
+        self._session = None
+    
+    @AutoFlow((float_type, [None, None]))
+    def predict_l(self, Xnew):
+        """
+        Compute the mean and variance of the latent function(s)
+        at the points `Xnew`.
+        """
+        return self.build_predict_l(Xnew)
+    
+    @AutoFlow((float_type, [None, None]))
+    def predict_f(self, Xnew):
+        """
+        Compute the mean and variance of the latent function(s)
+        at the points `Xnew`.
+        """
+        return self.build_predict_f(Xnew)
+    
+    @AutoFlow((float_type, [None, None]))
+    def predict_n(self, Xnew):
+        """
+        Compute the mean and variance of the latent function(s)
+        at the points `Xnew`.
+        """
+        return self.build_predict_n(Xnew)
+     
+    @AutoFlow((float_type, [None, None]), (tf.int32, []))
+    def predict_f_samples(self, Xnew, num_samples):
+        """
+        Produce samples from the posterior latent function(s) at the points
+        Xnew.
+        """
+        mu, var = self.build_predict_f(Xnew, full_cov=True)
+        jitter = tf.eye(tf.shape(mu)[0], dtype=float_type) * settings.numerics.jitter_level
+        samples = []
+        for i in range(self.num_latent):
+            L = tf.cholesky(var[:, :, i] + jitter)
+            shape = tf.stack([tf.shape(L)[0], num_samples])
+            V = tf.random_normal(shape, dtype=settings.dtypes.float_type)
+            samples.append(mu[:, i:i + 1] + tf.matmul(L, V))
+        return tf.transpose(tf.stack(samples))
+
 
         
         

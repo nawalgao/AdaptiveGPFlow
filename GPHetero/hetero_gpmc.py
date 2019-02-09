@@ -2,9 +2,11 @@
 import numpy as np
 import tensorflow as tf
 from .hetero_model import GPModel,GPModelHeteroNoiseRegression, GPModelAdaptive, GPModelAdaptiveLengthscale, GPModelAdaptLAdaptN
-from .hetero_model import GPModelAdaptLAdaptNMultiD
+from .hetero_model import GPModelAdaptLAdaptN2D
+#from .hetero_model import GPModelAdaptLAdaptNMultiD
 from gpflow.param import Param, DataHolder
 from .hetero_conditionals import conditional, nonstat_conditional
+from .hetero_conditionals import nonstat_conditional2D
 from .hetero_kernels import NonStationaryRBF, NonStationaryLengthscaleRBF
 from gpflow.priors import Gaussian
 from gpflow.mean_functions import Zero
@@ -485,7 +487,7 @@ class GPMCAdaptLAdaptN(GPModelAdaptLAdaptN):
         Construct a tf function to compute the likelihood of an adaptive GP
         model (non-stationary lengthscale whose 
         log is represented using latent GP L(.)).
-        \log p(Y, V1, V2| theta).
+        \log p(Y, V1, V2, V3| theta).
         """
         
         K1 = self.kern1.K(self.X)
@@ -557,8 +559,7 @@ class GPMCAdaptLAdaptN(GPModelAdaptLAdaptN):
         return mu, var
 
 
-    
-class GPMCAdaptLAdaptNMultiD(GPModelAdaptLAdaptNMultiD):
+class GPMCAdaptLAdaptN2D(GPModelAdaptLAdaptN2D):
     """ 
     X is a data matrix, size N x D
     Y is a data matrix, size N x 1
@@ -568,7 +569,7 @@ class GPMCAdaptLAdaptNMultiD(GPModelAdaptLAdaptNMultiD):
     
     
     This is a vanilla implementation of an adaptive GP (non-stationary lengthscale) 
-    with a Gaussian likelihood (multi-dimension)
+    with a Gaussian likelihood
     
     v1 ~ N(0, I)
     l = L1v1 
@@ -584,27 +585,29 @@ class GPMCAdaptLAdaptNMultiD(GPModelAdaptLAdaptNMultiD):
     f = NonStatLv3
     with
     NonStatL NonStatL^T = NonStatK
-    """ 
-    def __init__(self, X, Y, kern1_list, kern2, nonstat,
-                 num_latent=None, ARD = False):
-        
+    """
+    
+    def __init__(self, X, Y, kern1, kern2, noisekern, nonstat, num_latent=None): 
+
         X = DataHolder(X, on_shape_change='recompile')
         Y = DataHolder(Y, on_shape_change='recompile')
-        GPModelAdaptLAdaptNMultiD.__init__(self, X, Y, kern1_list, kern2, nonstat)
+        GPModelAdaptLAdaptN2D.__init__(self, X, Y, kern1, kern2, noisekern, nonstat)
+        
         self.num_data = X.shape[0]
         self.num_latent = num_latent or Y.shape[1]
         self.num_feat = X.shape[1]
-        
         # Standard normal dist for num_feat L(.) GP
-        self.V1 = Param(np.zeros((self.num_data, self.num_feat)))
+        self.V1 = Param(np.zeros((self.num_data, self.num_latent)))
         self.V1.prior = Gaussian(0., 1.)
-        # Standard normal dist for num_feat N(.) GP
         self.V2 = Param(np.zeros((self.num_data, self.num_latent)))
         self.V2.prior = Gaussian(0., 1.)
-        # Standard normal dist for NonStat F(.) GP
+        # Standard normal dist for num_feat N(.) GP
         self.V3 = Param(np.zeros((self.num_data, self.num_latent)))
         self.V3.prior = Gaussian(0., 1.)
-
+        # Standard normal dist for NonStat F(.) GP
+        self.V4 = Param(np.zeros((self.num_data, self.num_latent)))
+        self.V4.prior = Gaussian(0., 1.)
+    
     def compile(self, session=None, graph=None, optimizer=None):
         """
         Before calling the standard compile function, check to see if the size
@@ -615,45 +618,208 @@ class GPMCAdaptLAdaptNMultiD(GPModelAdaptLAdaptNMultiD):
         """
         if not self.num_data == self.X.shape[0]:
             self.num_data = self.X.shape[0]
-            self.V1 = Param(np.zeros((self.num_data, self.num_feat)))
+            self.V1 = Param(np.zeros((self.num_data, self.num_latent)))
             self.V1.prior = Gaussian(0., 1.)
             self.V2 = Param(np.zeros((self.num_data, self.num_latent)))
             self.V2.prior = Gaussian(0., 1.)
             self.V3 = Param(np.zeros((self.num_data, self.num_latent)))
             self.V3.prior = Gaussian(0., 1.)
-        
-        return super(GPModelAdaptLAdaptNMultiD, self).compile(session=session,
-                    graph=graph, optimizer=optimizer)
-
+            self.V4 = Param(np.zeros((self.num_data, self.num_latent)))
+            self.V4.prior = Gaussian(0., 1.)
+       
+        return super(GPMCAdaptLAdaptN2D, self).compile(session=session,
+                                         graph=graph,
+                                         optimizer=optimizer)
     def build_likelihood(self):  
+        
         """
         Construct a tf function to compute the likelihood of an adaptive GP
         model (non-stationary lengthscale whose 
         log is represented using latent GP L(.)).
-        \log p(Y, V1mat, V2mat| theta).
+        \log p(Y, V1, V2, V3, V4| theta).
         """
-        #Lexp_mat = tf.constant(0, shape=[self.num_data,self.num_feat])
-        self.Lexpmat = tf.placeholder(shape = [self.num_data,self.num_feat], dtype=tf.float32)
-        for i in xrange(self.num_feat):
-            K1 = self.kern1_list[i].K(self.X[:,i])
-            L1 = tf.cholesky(K1 + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
-            L = tf.matmul(L1, self.V1[:,i])
-            Lexp = tf.exp(L)
-            self.Lexpmat[:,i] = Lexp
-            
+        K1 = self.kern1.K(self.X[:,0])
+        L1 = tf.cholesky(K1 + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
+        Ls1 = tf.matmul(L1, self.V1)
+        self.Lexp1 = tf.exp(Ls1)
         
-        K2 = self.kern2.K(self.X)
+        K2 = self.kern2.K(self.X[:,1])
         L2 = tf.cholesky(K2 + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
-        N = tf.matmul(L2, self.V2)
+        Ls2 = tf.matmul(L2, self.V2)
+        self.Lexp2 = tf.exp(Ls2)
         
-       
+        K3 = self.kern3.K(self.X)
+        L3 = tf.cholesky(K3 + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
+        N = tf.matmul(L3, self.V3)
+        
+        Knonstat1 = self.nonstat.K(self.X[:,0], self.Lexp1, self.X[:,0], self.Lexp1)
+        Knonstat2 = self.nonstat.K(self.X[:,1], self.Lexp2, self.X[:,1], self.Lexp2)
+        Knonstat = Knonstat1*Knonstat2
+        Lnonstat = tf.cholesky(Knonstat + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
+        F = tf.matmul(Lnonstat, self.V4)
+        
+        return tf.reduce_sum(self.likelihood.logp(F, N, self.Y))
+    
+    def build_predict_l(self, Xnew, full_cov=False):
+        """
+        Predict latent lengthscale GP L(.) at new points Xnew
+        Xnew is a data matrix, point at which we want to predict
+
+        This method computes
+
+            p(L* | (L=L1V1) )
+
+        where L* are points on the GP at Xnew, N=L1V1 are points on the GP at X.
+
+        """
+        mu1, var1 = conditional(Xnew[:,0], self.X[:,0], self.kern1, self.V1,
+                              full_cov=full_cov,
+                              q_sqrt=None, whiten=True)
+        
+        mu2, var2 = conditional(Xnew[:,1], self.X[:,1], self.kern2, self.V2,
+                              full_cov=full_cov,
+                              q_sqrt=None, whiten=True)
+        
+        
+        return mu1, var2, mu2, var2
+
+    def build_predict_n(self, Xnew, full_cov=False):
+        """
+        Predict latent lengthscale GP N(.) at new points Xnew
+        Xnew is a data matrix, point at which we want to predict
+
+        This method computes
+
+            p(N* | (L=L2V2) )
+
+        where L* are points on the GP at Xnew, N=L2V2 are points on the GP at X.
+
+        """
+        mu, var = conditional(Xnew, self.X, self.kern3, self.V3,
+                              full_cov=full_cov,
+                              q_sqrt=None, whiten=True)
+        
+        return mu, var
+    
+        
+    def build_predict_f(self, Xnew, full_cov=True):
+        """
+        Predict GP F(.) at new points Xnew
+        Xnew is a data matrix, point at which we want to predict
+
+        This method computes
+
+            p(F* | (L=LnonstatV2) )
+
+        where L* are points on the GP at Xnew, N=L1V1 are points on the GP at X.
+
+        """
+        mu, var = nonstat_conditional2D(Xnew, self.X,
+                                      self.nonstat, self.kern1, self.kern2,
+                                      self.V1, self.V2, self.V4, full_cov)
+        return mu, var
         
     
-    
-    
-    
-    
-        
-    
-    
-    
+            
+
+
+#    
+#class GPMCAdaptLAdaptNMultiD(GPModelAdaptLAdaptNMultiD):
+#    """ 
+#    X is a data matrix, size N x D
+#    Y is a data matrix, size N x 1
+#    kern1, kern2  are appropriate GPflow objects
+#    kern1: covariance function associated with adaptive lengthscale whose log is represented using GP L(.)
+#    kern2: covariance function associated with adaptive heteroscedastic noise whose log is represented using GP N(.)
+#    
+#    
+#    This is a vanilla implementation of an adaptive GP (non-stationary lengthscale) 
+#    with a Gaussian likelihood (multi-dimension)
+#    
+#    v1 ~ N(0, I)
+#    l = L1v1 
+#    with
+#    L1 L1^T = K1 and 
+#    
+#    v2 ~ N(0, I)
+#    n = L2v2
+#    with
+#    L2 L2^T = K2
+#    
+#    v3 ~ N(0, I)
+#    f = NonStatLv3
+#    with
+#    NonStatL NonStatL^T = NonStatK
+#    """ 
+#    def __init__(self, X, Y, kern1_list, kern2, nonstat,
+#                 num_latent=None, ARD = False):
+#        
+#        X = DataHolder(X, on_shape_change='recompile')
+#        Y = DataHolder(Y, on_shape_change='recompile')
+#        GPModelAdaptLAdaptNMultiD.__init__(self, X, Y, kern1_list, kern2, nonstat)
+#        self.num_data = X.shape[0]
+#        self.num_latent = num_latent or Y.shape[1]
+#        self.num_feat = X.shape[1]
+#        
+#        # Standard normal dist for num_feat L(.) GP
+#        self.V1 = Param(np.zeros((self.num_data, self.num_feat)))
+#        self.V1.prior = Gaussian(0., 1.)
+#        # Standard normal dist for num_feat N(.) GP
+#        self.V2 = Param(np.zeros((self.num_data, self.num_latent)))
+#        self.V2.prior = Gaussian(0., 1.)
+#        # Standard normal dist for NonStat F(.) GP
+#        self.V3 = Param(np.zeros((self.num_data, self.num_latent)))
+#        self.V3.prior = Gaussian(0., 1.)
+#
+#    def compile(self, session=None, graph=None, optimizer=None):
+#        """
+#        Before calling the standard compile function, check to see if the size
+#        of the data has changed and add parameters appropriately.
+#
+#        This is necessary because the shape of the parameters depends on the
+#        shape of the data.
+#        """
+#        if not self.num_data == self.X.shape[0]:
+#            self.num_data = self.X.shape[0]
+#            self.V1 = Param(np.zeros((self.num_data, self.num_feat)))
+#            self.V1.prior = Gaussian(0., 1.)
+#            self.V2 = Param(np.zeros((self.num_data, self.num_latent)))
+#            self.V2.prior = Gaussian(0., 1.)
+#            self.V3 = Param(np.zeros((self.num_data, self.num_latent)))
+#            self.V3.prior = Gaussian(0., 1.)
+#        
+#        return super(GPModelAdaptLAdaptNMultiD, self).compile(session=session,
+#                    graph=graph, optimizer=optimizer)
+#
+#    def build_likelihood(self):  
+#        """
+#        Construct a tf function to compute the likelihood of an adaptive GP
+#        model (non-stationary lengthscale whose 
+#        log is represented using latent GP L(.)).
+#        \log p(Y, V1mat, V2mat| theta).
+#        """
+#        #Lexp_mat = tf.constant(0, shape=[self.num_data,self.num_feat])
+#        self.Lexpmat = tf.placeholder(shape = [self.num_data,self.num_feat], dtype=tf.float32)
+#        for i in xrange(self.num_feat):
+#            K1 = self.kern1_list[i].K(self.X[:,i])
+#            L1 = tf.cholesky(K1 + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
+#            L = tf.matmul(L1, self.V1[:,i])
+#            Lexp = tf.exp(L)
+#            self.Lexpmat[:,i] = Lexp
+#            
+#        
+#        K2 = self.kern2.K(self.X)
+#        L2 = tf.cholesky(K2 + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
+#        N = tf.matmul(L2, self.V2)
+#        
+#       
+#        
+#    
+#    
+#    
+#    
+#    
+#        
+#    
+#    
+#    
