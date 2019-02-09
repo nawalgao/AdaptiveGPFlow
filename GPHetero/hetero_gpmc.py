@@ -2,7 +2,7 @@
 import numpy as np
 import tensorflow as tf
 from .hetero_model import GPModel,GPModelHeteroNoiseRegression, GPModelAdaptive, GPModelAdaptiveLengthscale, GPModelAdaptLAdaptN
-from .hetero_model import GPModelAdaptLAdaptN2D
+from .hetero_model import GPModelAdaptLAdaptN2D, GPModelAdaptiveLengthscale2D
 #from .hetero_model import GPModelAdaptLAdaptNMultiD
 from gpflow.param import Param, DataHolder
 from .hetero_conditionals import conditional, nonstat_conditional
@@ -588,7 +588,10 @@ class GPMCAdaptLAdaptN2D(GPModelAdaptLAdaptN2D):
     """
     
     def __init__(self, X, Y, kern1, kern2, noisekern, nonstat, num_latent=None): 
-
+        X1 = X[:,0][:,None]
+        X2 = X[:,1][:,None]
+        self.X1 = DataHolder(X1, on_shape_change='recompile')
+        self.X2 = DataHolder(X2, on_shape_change='recompile')
         X = DataHolder(X, on_shape_change='recompile')
         Y = DataHolder(Y, on_shape_change='recompile')
         GPModelAdaptLAdaptN2D.__init__(self, X, Y, kern1, kern2, noisekern, nonstat)
@@ -607,6 +610,8 @@ class GPMCAdaptLAdaptN2D(GPModelAdaptLAdaptN2D):
         # Standard normal dist for NonStat F(.) GP
         self.V4 = Param(np.zeros((self.num_data, self.num_latent)))
         self.V4.prior = Gaussian(0., 1.)
+        
+        #self.X1, self.X2 = tf.split(X, num_or_size_splits = self.num_feat, axis = 0)
     
     def compile(self, session=None, graph=None, optimizer=None):
         """
@@ -638,22 +643,23 @@ class GPMCAdaptLAdaptN2D(GPModelAdaptLAdaptN2D):
         log is represented using latent GP L(.)).
         \log p(Y, V1, V2, V3, V4| theta).
         """
-        K1 = self.kern1.K(self.X[:,0])
-        L1 = tf.cholesky(K1 + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
+       
+        K1 = self.kern1.K(self.X1)
+        L1 = tf.cholesky(K1 + tf.eye(tf.shape(self.X1)[0], dtype=float_type)*settings.numerics.jitter_level)
         Ls1 = tf.matmul(L1, self.V1)
         self.Lexp1 = tf.exp(Ls1)
         
-        K2 = self.kern2.K(self.X[:,1])
-        L2 = tf.cholesky(K2 + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
+        K2 = self.kern2.K(self.X2)
+        L2 = tf.cholesky(K2 + tf.eye(tf.shape(self.X2)[0], dtype=float_type)*settings.numerics.jitter_level)
         Ls2 = tf.matmul(L2, self.V2)
         self.Lexp2 = tf.exp(Ls2)
         
-        K3 = self.kern3.K(self.X)
+        K3 = self.noisekern.K(self.X)
         L3 = tf.cholesky(K3 + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
         N = tf.matmul(L3, self.V3)
         
-        Knonstat1 = self.nonstat.K(self.X[:,0], self.Lexp1, self.X[:,0], self.Lexp1)
-        Knonstat2 = self.nonstat.K(self.X[:,1], self.Lexp2, self.X[:,1], self.Lexp2)
+        Knonstat1 = self.nonstat.K(self.X1, self.Lexp1, self.X1, self.Lexp1)
+        Knonstat2 = self.nonstat.K(self.X2, self.Lexp2, self.X2, self.Lexp2)
         Knonstat = Knonstat1*Knonstat2
         Lnonstat = tf.cholesky(Knonstat + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
         F = tf.matmul(Lnonstat, self.V4)
@@ -695,7 +701,7 @@ class GPMCAdaptLAdaptN2D(GPModelAdaptLAdaptN2D):
         where L* are points on the GP at Xnew, N=L2V2 are points on the GP at X.
 
         """
-        mu, var = conditional(Xnew, self.X, self.kern3, self.V3,
+        mu, var = conditional(Xnew, self.X, self.noisekern, self.V3,
                               full_cov=full_cov,
                               q_sqrt=None, whiten=True)
         
@@ -718,7 +724,141 @@ class GPMCAdaptLAdaptN2D(GPModelAdaptLAdaptN2D):
                                       self.nonstat, self.kern1, self.kern2,
                                       self.V1, self.V2, self.V4, full_cov)
         return mu, var
+
+class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
+    """ 
+    X is a data matrix, size N x D
+    Y is a data matrix, size N x 1
+    kern1
+    kern1: covariance function associated with adaptive lengthscale whose log is represented using GP L(.)
+    
+    
+    This is a vanilla implementation of an adaptive GP (non-stationary lengthscale) 
+    with a Gaussian likelihood
+    
+    v1 ~ N(0, I)
+    l = L1v1 
+    with
+    L1 L1^T = K1 and 
+    
+    v2 ~ N(0, I)
+    f = NonStatLv2
+    with
+    NonStatL NonStatL^T = NonStatK
+    """
+    def __init__(self, X, Y, kern1, kern2, nonstat, num_latent=None): 
+        X1 = X[:,0][:,None]
+        X2 = X[:,1][:,None]
+        self.X1 = DataHolder(X1, on_shape_change='recompile')
+        self.X2 = DataHolder(X2, on_shape_change='recompile')
+        X = DataHolder(X, on_shape_change='recompile')
+        Y = DataHolder(Y, on_shape_change='recompile')
+        GPModelAdaptiveLengthscale2D.__init__(self, X, Y, kern1, kern2, nonstat)
         
+        self.num_data = X.shape[0]
+        self.num_latent = num_latent or Y.shape[1]
+        self.num_feat = X.shape[1]
+        # Standard normal dist for num_feat L(.) GP
+        self.V1 = Param(np.zeros((self.num_data, self.num_latent)))
+        self.V1.prior = Gaussian(0., 1.)
+        self.V2 = Param(np.zeros((self.num_data, self.num_latent)))
+        self.V2.prior = Gaussian(0., 1.)
+       
+        # Standard normal dist for NonStat F(.) GP
+        self.V4 = Param(np.zeros((self.num_data, self.num_latent)))
+        self.V4.prior = Gaussian(0., 1.)
+    
+    def compile(self, session=None, graph=None, optimizer=None):
+        """
+        Before calling the standard compile function, check to see if the size
+        of the data has changed and add parameters appropriately.
+
+        This is necessary because the shape of the parameters depends on the
+        shape of the data.
+        """
+        if not self.num_data == self.X.shape[0]:
+            self.num_data = self.X.shape[0]
+            self.V1 = Param(np.zeros((self.num_data, self.num_latent)))
+            self.V1.prior = Gaussian(0., 1.)
+            self.V2 = Param(np.zeros((self.num_data, self.num_latent)))
+            self.V2.prior = Gaussian(0., 1.)
+            self.V4 = Param(np.zeros((self.num_data, self.num_latent)))
+            self.V4.prior = Gaussian(0., 1.)
+       
+        return super(GPMCAdaptiveLengthscale2D, self).compile(session=session,
+                                         graph=graph,
+                                         optimizer=optimizer)
+
+    def build_likelihood(self):  
+        
+        """
+        Construct a tf function to compute the likelihood of an adaptive GP
+        model (non-stationary lengthscale whose 
+        log is represented using latent GP L(.)).
+        \log p(Y, V1, V2, V3, V4| theta).
+        """
+       
+        K1 = self.kern1.K(self.X1)
+        L1 = tf.cholesky(K1 + tf.eye(tf.shape(self.X1)[0], dtype=float_type)*settings.numerics.jitter_level)
+        Ls1 = tf.matmul(L1, self.V1)
+        self.Lexp1 = tf.exp(Ls1)
+        
+        K2 = self.kern2.K(self.X2)
+        L2 = tf.cholesky(K2 + tf.eye(tf.shape(self.X2)[0], dtype=float_type)*settings.numerics.jitter_level)
+        Ls2 = tf.matmul(L2, self.V2)
+        self.Lexp2 = tf.exp(Ls2)
+        
+        Knonstat1 = self.nonstat.K(self.X1, self.Lexp1, self.X1, self.Lexp1)
+        Knonstat2 = self.nonstat.K(self.X2, self.Lexp2, self.X2, self.Lexp2)
+        Knonstat = Knonstat1*Knonstat2
+        Lnonstat = tf.cholesky(Knonstat + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
+        self.F = tf.matmul(Lnonstat, self.V4)
+        
+        return tf.reduce_sum(self.likelihood.logp(self.F, self.Y))
+    
+    
+    def build_predict_l(self, Xnew, full_cov=False):
+        """
+        Predict latent lengthscale GP L(.) at new points Xnew
+        Xnew is a data matrix, point at which we want to predict
+
+        This method computes
+
+            p(L* | (L=L1V1) )
+
+        where L* are points on the GP at Xnew, N=L1V1 are points on the GP at X.
+
+        """
+        mu1, var1 = conditional(Xnew[:,0], self.X1, self.kern1, self.V1,
+                              full_cov=full_cov,
+                              q_sqrt=None, whiten=True)
+        
+        mu2, var2 = conditional(Xnew[:,1], self.X2, self.kern2, self.V2,
+                              full_cov=full_cov,
+                              q_sqrt=None, whiten=True)
+        
+        
+        return mu1, var2, mu2, var2
+    
+    
+    def build_predict_f(self, Xnew, full_cov=True):
+        """
+        Predict GP F(.) at new points Xnew
+        Xnew is a data matrix, point at which we want to predict
+
+        This method computes
+
+            p(F* | (L=LnonstatV2) )
+
+        where L* are points on the GP at Xnew, N=L1V1 are points on the GP at X.
+
+        """
+        mu, var = nonstat_conditional2D(Xnew, self.X1, self.X2,
+                                      self.nonstat, self.kern1, self.kern2,
+                                      self.V1, self.V2, self.V4, full_cov)
+        return mu, var
+
+
     
             
 

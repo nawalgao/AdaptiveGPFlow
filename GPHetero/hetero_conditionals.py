@@ -150,19 +150,17 @@ def nonstat_conditional(Xnew, X, nonstat, kern1, v1, v2, full_cov = True):
 
 
 @NameScoped("nonstat_conditional2D")
-def nonstat_conditional2D(Xnew, X, nonstat, kern1, kern2, v1, v2, v4, full_cov = True):
+def nonstat_conditional2D(Xnew, X1, X2, nonstat, kern1, kern2, v1, v2, v4, full_cov = True):
     """
     Given F, representing the nonstationary GP (variable lengthscale) at the points X, produce the mean and
     (co-)variance of the GP at the points Xnew.
     """
     
     # compute kernel stuff
-    num_data = tf.shape(X)[0]  # M
+    num_data = tf.shape(X1)[0]  # M
     num_func = 1  # only one output GP
-    X1 = X[:,0]
-    X2 = X[:,1]
-    Xn1 = Xnew[:,0]
-    Xn2 = Xnew[:,1]
+    Xn1 = Xnew[:,0][:,None]
+    Xn2 = Xnew[:,1][:,None]
     
     
     L_GP_Kmn1 = kern1.K(X1, Xn1)
@@ -209,10 +207,18 @@ def nonstat_conditional2D(Xnew, X, nonstat, kern1, kern2, v1, v2, v4, full_cov =
     
     # compute the covariance due to the conditioning
     if full_cov:
-        NonStat_fvar = nonstat.K(Xnew, l_mu_new_exp, Xnew, l_mu_new_exp) - tf.matmul(NonStat_A, NonStat_A, transpose_a=True)
+        NonStat_fvar = (nonstat.K(Xn1, l_mu_new_exp1, Xn1, l_mu_new_exp1)*nonstat.K(Xn2, l_mu_new_exp2, Xn2, l_mu_new_exp2) - 
+                        tf.matmul(NonStat_A, NonStat_A, transpose_a=True))
         shape = tf.stack([num_func, 1, 1])
     else:
         ValueError("Need to work with full covariance")
+     
+    # construct the conditional mean
+    NonStat_fmean = tf.matmul(NonStat_A, v4, transpose_a=True)
+    
+    NonStat_fvar = tf.transpose(NonStat_fvar)  # N x K or N x N x K
+    
+    return NonStat_fmean, NonStat_fvar
     
      
    
