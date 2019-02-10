@@ -829,11 +829,11 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         where L* are points on the GP at Xnew, N=L1V1 are points on the GP at X.
 
         """
-        mu1, var1 = conditional(Xnew[:,0], self.X1, self.kern1, self.V1,
+        mu1, var1 = conditional(Xnew[:,0][:,None], self.X1, self.kern1, self.V1,
                               full_cov=full_cov,
                               q_sqrt=None, whiten=True)
         
-        mu2, var2 = conditional(Xnew[:,1], self.X2, self.kern2, self.V2,
+        mu2, var2 = conditional(Xnew[:,1][:,None], self.X2, self.kern2, self.V2,
                               full_cov=full_cov,
                               q_sqrt=None, whiten=True)
         
