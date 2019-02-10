@@ -47,47 +47,54 @@ def conditional(Xnew, X, kern, f, full_cov=False, q_sqrt=None, whiten=False):
 
     # compute kernel stuff
     num_data = tf.shape(X)[0]  # M
+    num_feat = tf.shape(X)[1]
     num_func = tf.shape(f)[1]  # K
-    Kmn = kern.K(X, Xnew)
-    Kmm = kern.K(X) + tf.eye(num_data, dtype=float_type) * settings.numerics.jitter_level
-    Lm = tf.cholesky(Kmm)
+    mu = {}
+    var = {}
+    for i in xrange(num_feat):
+        f_i = f["V" + str(i)]
+        Kmn = kerns["ell" + str(i)].K(X, Xnew)
+        Kmm = kerns["ell"+ str(i)].K(X) + tf.eye(num_data, dtype=float_type) * settings.numerics.jitter_level
+        Lm = tf.cholesky(Kmm)
 
-    # Compute the projection matrix A
-    A = tf.matrix_triangular_solve(Lm, Kmn, lower=True)
+        # Compute the projection matrix A
+        A = tf.matrix_triangular_solve(Lm, Kmn, lower=True)
 
-    # compute the covariance due to the conditioning
-    if full_cov:
-        fvar = kern.K(Xnew) - tf.matmul(A, A, transpose_a=True)
-        shape = tf.stack([num_func, 1, 1])
-    else:
-        fvar = kern.Kdiag(Xnew) - tf.reduce_sum(tf.square(A), 0)
-        shape = tf.stack([num_func, 1])
-    fvar = tf.tile(tf.expand_dims(fvar, 0), shape)  # K x N x N or K x N
-
-    # another backsubstitution in the unwhitened case
-    if not whiten:
-        A = tf.matrix_triangular_solve(tf.transpose(Lm), A, lower=False)
-
-    # construct the conditional mean
-    fmean = tf.matmul(A, f, transpose_a=True)
-
-    if q_sqrt is not None:
-        if q_sqrt.get_shape().ndims == 2:
-            LTA = A * tf.expand_dims(tf.transpose(q_sqrt), 2)  # K x M x N
-        elif q_sqrt.get_shape().ndims == 3:
-            L = tf.matrix_band_part(tf.transpose(q_sqrt, (2, 0, 1)), -1, 0)  # K x M x M
-            A_tiled = tf.tile(tf.expand_dims(A, 0), tf.stack([num_func, 1, 1]))
-            LTA = tf.matmul(L, A_tiled, transpose_a=True)  # K x M x N
-        else:  # pragma: no cover
-            raise ValueError("Bad dimension for q_sqrt: %s" %
-                             str(q_sqrt.get_shape().ndims))
+        # compute the covariance due to the conditioning
         if full_cov:
-            fvar = fvar + tf.matmul(LTA, LTA, transpose_a=True)  # K x N x N
+            fvar = kerns["ell"+str(i)].K(Xnew) - tf.matmul(A, A, transpose_a=True)
+            shape = tf.stack([num_func, 1, 1])
         else:
-            fvar = fvar + tf.reduce_sum(tf.square(LTA), 1)  # K x N
-    fvar = tf.transpose(fvar)  # N x K or N x N x K
+            fvar = kerns["ell"+str(i)].Kdiag(Xnew) - tf.reduce_sum(tf.square(A), 0)
+            shape = tf.stack([num_func, 1])
+        fvar = tf.tile(tf.expand_dims(fvar, 0), shape)  # K x N x N or K x N
 
-    return fmean, fvar
+        # another backsubstitution in the unwhitened case
+        if not whiten:
+            A = tf.matrix_triangular_solve(tf.transpose(Lm), A, lower=False)
+
+        # construct the conditional mean
+        fmean = tf.matmul(A, f_i, transpose_a=True)
+
+        if q_sqrt is not None:
+            if q_sqrt.get_shape().ndims == 2:
+                LTA = A * tf.expand_dims(tf.transpose(q_sqrt), 2)  # K x M x N
+            elif q_sqrt.get_shape().ndims == 3:
+                L = tf.matrix_band_part(tf.transpose(q_sqrt, (2, 0, 1)), -1, 0)  # K x M x M
+                A_tiled = tf.tile(tf.expand_dims(A, 0), tf.stack([num_func, 1, 1]))
+                LTA = tf.matmul(L, A_tiled, transpose_a=True)  # K x M x N
+            else:  # pragma: no cover
+                raise ValueError("Bad dimension for q_sqrt: %s" %
+                                 str(q_sqrt.get_shape().ndims))
+            if full_cov:
+                fvar = fvar + tf.matmul(LTA, LTA, transpose_a=True)  # K x N x N
+            else:
+                fvar = fvar + tf.reduce_sum(tf.square(LTA), 1)  # K x N
+        fvar = tf.transpose(fvar)  # N x K or N x N x K
+        mu["ell_pred_mean_" + str(i)] = fmean
+        var["ell_pred_var_" + str(i)] = fvar
+
+    return mu, var
 
 @NameScoped("nonstat_conditional")
 def nonstat_conditional(Xnew, X, nonstat, kern1, v1, v2, full_cov = True):
@@ -199,7 +206,7 @@ def nonstat_conditional2D(Xnew, X1, X2, nonstat, kern1, kern2, v1, v2, v4, full_
     
     
     NonStat_Kmn = nonstat.K(X1, Lexp1, Xn1, l_mu_new_exp1) * nonstat.K(X2, Lexp2, Xn2, l_mu_new_exp2)
-    NonStat_Kmm = nonstat.K(X1, Lexp1, X1, Lexp1)*nonstat.K(X2, Lexp2, X2, Lexp2) + tf.eye(num_data, dtype=float_type) * settings.numerics.jitter_level
+    NonStat_Kmm = nonstat.K(X1, Lexp1, X1, Lexp1) * nonstat.K(X2, Lexp2, X2, Lexp2) + tf.eye(num_data, dtype=float_type) * settings.numerics.jitter_level
     NonStat_Lm = tf.cholesky(NonStat_Kmm)
     
     # Compute the projection matrix A
@@ -207,7 +214,7 @@ def nonstat_conditional2D(Xnew, X1, X2, nonstat, kern1, kern2, v1, v2, v4, full_
     
     # compute the covariance due to the conditioning
     if full_cov:
-        NonStat_fvar = (nonstat.K(Xn1, l_mu_new_exp1, Xn1, l_mu_new_exp1)*nonstat.K(Xn2, l_mu_new_exp2, Xn2, l_mu_new_exp2) - 
+        NonStat_fvar = (nonstat.K(Xn1, l_mu_new_exp1, Xn1, l_mu_new_exp1) * nonstat.K(Xn2, l_mu_new_exp2, Xn2, l_mu_new_exp2) - 
                         tf.matmul(NonStat_A, NonStat_A, transpose_a=True))
         shape = tf.stack([num_func, 1, 1])
     else:

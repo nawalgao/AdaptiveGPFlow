@@ -383,20 +383,17 @@ class GPModelAdaptiveLengthscale2D(Model):
     regression models with heteroscedastic noise,
     wherein, noise is represented by a latent GP N(.)
     """
-    def __init__(self, X, Y, kern1, kern2, nonstat, name='adaptive_lengthscale_gp2D'):
+    def __init__(self, X, Y, kern, nonstat, name='adaptive_lengthscale_gp2D'):
         Model.__init__(self, name)
-        self.kern1 = kern1
-        self.kern2 = kern2
+        self.kern_type = kern
         self.nonstat = nonstat
         self.likelihood = Gaussian()
-        
         if isinstance(X, np.ndarray):
             #: X is a data matrix; each row represents one instance
             X = DataHolder(X)
         if isinstance(Y, np.ndarray):
-            #: Y is a data matrix, rows correspond to the rows in X, columns are treated independently
+            #: Y is a data matrix; rows correspond to the rows in X, columns are treated independently
             Y = DataHolder(Y)
-        
         self.likelihood._check_targets(Y.value)
         self.X, self.Y = X, Y
         self._session = None
@@ -432,8 +429,3 @@ class GPModelAdaptiveLengthscale2D(Model):
             V = tf.random_normal(shape, dtype=settings.dtypes.float_type)
             samples.append(mu[:, i:i + 1] + tf.matmul(L, V))
         return tf.transpose(tf.stack(samples))
-
-
-        
-        
-    
