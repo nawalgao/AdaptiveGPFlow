@@ -746,7 +746,7 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
     with
     NonStatL NonStatL^T = NonStatK
     """
-    def __init__(self, X, Y, kern, nonstat, num_latent=None): 
+    def __init__(self, X, Y, kern, nonstat, noisekern, num_latent=None): 
         self.num_data = X.shape[0]
         self.num_latent = num_latent or Y.shape[1]
         self.num_feat = X.shape[1]
@@ -754,11 +754,13 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         self.kerns = {}
         X = DataHolder(X, on_shape_change='recompile')
         Y = DataHolder(Y, on_shape_change='recompile')
-        GPModelAdaptiveLengthscale2D.__init__(self, X, Y, kern, nonstat)
+        GPModelAdaptiveLengthscale2D.__init__(self, X, Y, kern, nonstat, noisekern)
         for i in xrange(self.num_feat):
             self.kerns["ell"+str(i)] = self.kern_type
         self.V = Param(np.zeros((self.num_data, self.num_feat)))
         self.V.prior = Gaussian(0., 1.)
+        self.V3 = Param(np.zeros((self.num_data, self.num_latent)))
+        self.V3.prior = Gaussian(0., 1.)
         self.V4 = Param(np.zeros((self.num_data, self.num_latent)))
         self.V4.prior = Gaussian(0., 1.)
     
@@ -775,13 +777,14 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
             self.num_feat = self.X.shape[1]
             self.V = Param(np.zeros((self.num_data, self.num_feat)))
             self.V.prior = Gaussian(0., 1.)
+            self.V3 = Param(np.zeros((self.num_data, self.num_latent)))
+            self.V3.prior = Gaussian(0., 1.)
             self.V4 = Param(np.zeros((self.num_data, self.num_latent)))
             self.V4.prior = Gaussian(0., 1.)
        
         return super(GPMCAdaptiveLengthscale2D, self).compile(session=session,
                                          graph=graph,
                                          optimizer=optimizer)
-
 
     def build_likelihood(self):  
         
@@ -791,21 +794,25 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         log is represented using latent GP L(.)).
         \log p(Y, V1, V2, V3, V4| theta).
         """
+        # noise likelihood
+        K3 = self.noisekern.K(self.X)
+        L3 = tf.cholesky(K3 + tf.eye(tf.shape(self.X)[0], dtype=float_type) * settings.numerics.jitter_level)
+        N = tf.matmul(L3, self.V3)
+        # ell likelihood
         K_X_X = tf.ones(shape=[self.num_data, self.num_data], dtype=float_type)
         Xi_s = tf.split(self.X, num_or_size_splits = self.num_feat, axis = 1)
         Vi_s = tf.split(self.V, num_or_size_splits = self.num_feat, axis = 1)
         for i in xrange(self.num_feat):
             X_i = Xi_s[i]
             V_i = Vi_s[i]
-            K_i = self.kerns["ell"+str(i)].K(X_i)
+            K_i = self.kerns["ell" + str(i)].K(X_i)
             L_i = tf.cholesky(K_i + tf.eye(tf.shape(X_i)[0], dtype=float_type) * 1e-4)
             Ls_i = tf.matmul(L_i, V_i)
             Ls_i_exp = tf.exp(Ls_i)
             K_X_X = tf.multiply(K_X_X, self.nonstat.K(X_i, Ls_i_exp, X_i, Ls_i_exp))
         Lnonstat = tf.cholesky(K_X_X + tf.eye(tf.shape(self.X)[0], dtype=float_type) * 1e-4)
-        self.F = tf.matmul(Lnonstat, self.V4)
-        return tf.reduce_sum(self.likelihood.logp(self.F, self.Y))
-    
+        F = tf.matmul(Lnonstat, self.V4)
+        return tf.reduce_sum(self.likelihood.logp(F, N, self.Y))
 
     def build_predict_l(self, Xnew, full_cov=False):
         """
@@ -834,7 +841,16 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
             var.append(var_i)
         return mu, var
 
-    
+    def build_predict_n(self, Xnew):
+        """
+        Predict latent noise GP n(.) at Xnew.
+        """
+        mu, var = conditional(Xnew, self.X, self.noisekern, self.V3,
+                              full_cov=full_cov,
+                              q_sqrt=None, whiten=True)
+        return mu, var
+
+
     def build_predict_f(self, Xnew, full_cov=True):
         """
         Predict GP F(.) at new points Xnew

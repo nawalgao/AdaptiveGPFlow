@@ -383,11 +383,12 @@ class GPModelAdaptiveLengthscale2D(Model):
     regression models with heteroscedastic noise,
     wherein, noise is represented by a latent GP N(.)
     """
-    def __init__(self, X, Y, kern, nonstat, name='adaptive_lengthscale_gp2D'):
+    def __init__(self, X, Y, kern, nonstat, noisekern, name='adaptive_lengthscale_gp2D'):
         Model.__init__(self, name)
         self.kern_type = kern
         self.nonstat = nonstat
-        self.likelihood = Gaussian()
+        self.noisekern = noisekern
+        self.likelihood = GaussianHeteroNoise()
         if isinstance(X, np.ndarray):
             #: X is a data matrix; each row represents one instance
             X = DataHolder(X)
@@ -405,7 +406,15 @@ class GPModelAdaptiveLengthscale2D(Model):
         at the points `Xnew`.
         """
         return self.build_predict_l(Xnew)
-    
+        
+    @AutoFlow((float_type, [None, None]))
+    def predict_n(self, Xnew):
+        """
+        Compute the mean and variance of the latent function(s)
+        at the points `Xnew`.
+        """
+        return self.build_predict_n(Xnew)
+
     @AutoFlow((float_type, [None, None]))
     def predict_f(self, Xnew):
         """
