@@ -148,6 +148,7 @@ def nonstat_conditional2D(Xnew, X, mu_ell_Xnew, var_ell_Xnew, mu_ell_X, var_ell_
     num_data = tf.shape(X)[0]  # M
     num_new = tf.shape(Xnew)[0]
     num_feat = len(mu_ell_X)
+    num_func = 1
     # Xn1 = Xnew[:,0][:, None]
     # Xn2 = Xnew[:,1][:, None]
     # L_GP_Kmn1 = kern1.K(X1, Xn1)
@@ -208,7 +209,7 @@ def nonstat_conditional2D(Xnew, X, mu_ell_Xnew, var_ell_Xnew, mu_ell_X, var_ell_
         ValueError("Need to work with full covariance")
      
     # construct the conditional mean
-    NonStat_fmean = tf.matmul(NonStat_A, v4, transpose_a=True)
+    NonStat_fmean = tf.matmul(NonStat_A, V4, transpose_a=True)
     
     NonStat_fvar = tf.transpose(NonStat_fvar)  # N x K or N x N x K
     
