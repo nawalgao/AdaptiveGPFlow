@@ -165,7 +165,7 @@ class NonStatLRBFMultiD(NonStationaryLengthscaleRBF):
         """
         if X2 is None:
             X2 = X
-        sqd = tf.squared_difference(tf.tile(X1, tf.constant(tf.transpose(X2).eval().shape)), tf.tile(tf.transpose(X2), tf.constant(X1.eval().shape)))
+        sqd = tf.squared_difference(tf.tile(X1, tf.constant(tf.transpose(X2).shape)), tf.tile(tf.transpose(X2), tf.constant(X1.shape)))
         return sqd
 
     def K(self, X1, Lexp1, X2, Lexp2):
@@ -176,7 +176,7 @@ class NonStatLRBFMultiD(NonStationaryLengthscaleRBF):
         S1(.) representing log of non-stationary signal variance values at points X1.
         """
         dist_sqr = self._get_squared_distance(X1, X2)
-        l_sqr = tf.tile(tf.square(Lexp1), tf.constant(tf.transpose(X2).eval().shape)) + tf.square(tf.transpose(Lexp2), tf.constant(x1.eval().shape))
+        l_sqr = tf.tile(tf.square(Lexp1), tf.constant(tf.transpose(X2).shape)) + tf.square(tf.transpose(Lexp2), tf.constant(x1.shape))
         l_2_prod = 2 * Lexp1 * tf.transpose(Lexp2)
         cov = tf.sqrt(l_2_prod / l_sqr) * tf.exp(-1. * dist_sqr / l_sqr)
         return cov
@@ -187,9 +187,11 @@ class NonStatLRBFMultiD(NonStationaryLengthscaleRBF):
         Lexpmat1, Lexpmat2 : latent lengthscale matrix (N X D)
         Lexpmat1 : representing log of non-stat lengthscale values for each dimension of X1
         """
-        assert X1.shape[1] == X2.shape[1]
+        # assert X1.shape[1] == X2.shape[1]
         num_data = X1.shape[0]
         num_feat = X1.shape[1]
+        import  pdb
+        pdb.set_trace()
         cov = tf.ones(shape=[X1.shape[0], X2.shape[0]])
         for i in xrange(num_feat):
             cov = tf.multiply(self.K(X1[:, i][:, None], Lexp1[:, i][:, None], X2[:, i][:, None], Lexp2[:, i][:, None]), cov)
@@ -199,7 +201,7 @@ class NonStatLRBFMultiD(NonStationaryLengthscaleRBF):
               (float_type, [None, None]), (float_type, [None, None]))
 
     def compute_Ka(self, X1, Lexp1, X2, Lexp2):
-        return self.K(X1mat, Lexpmat1, Xmat2, Lexpmat2)
+        return self.Kgram(X1, Lexp1, X2, Lexp2)
 
     def is_pos_def(x):
         return np.all(np.linalg.eigvals(x) > 0)
@@ -210,8 +212,18 @@ if __name__ == '__main__':
     B = np.arange(1, 100)[:,None]
     C = np.arange(1, 100)[:,None]
     
+    Cov = NonStationaryLengthscaleRBF()
+    #r = Cov.compute_K(A,A,A,A)
+    X = np.random.rand(3, 2)
+    #K = gpflow.kernels.RBF(input_dim = 2, ARD = True)
+    a = Cov.compute_K(A, A, A, A)
+    import pdb
+    pdb.set_trace()
     Cov = NonStatLRBFMultiD()
     #r = Cov.compute_K(A,A,A,A)
     X = np.random.rand(3, 2)
+    # import pdb
+    # pdb.set_trace()
+    Cov.compute_Ka(X, X, X, X)
     #K = gpflow.kernels.RBF(input_dim = 2, ARD = True)
     a = Cov.compute_K(X, X, X, X)

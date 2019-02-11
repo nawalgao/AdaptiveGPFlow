@@ -752,25 +752,26 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         # X2 = X[:,1][:,None]
         # self.X1 = DataHolder(X1, on_shape_change='recompile')
         # self.X2 = DataHolder(X2, on_shape_change='recompile')
-        self.Xs = {}
+        # self.Xs = {}
         self.num_data = X.shape[0]
         self.num_latent = num_latent or Y.shape[1]
         self.num_feat = X.shape[1]
         # Standard normal dist for num_feat L(.) GP
-        self.V = {}
+        # self.V = []
         self.kerns = {}
-        for i in xrange(self.num_feat):
-            self.Xs["X"+str(i)] = DataHolder(X[:, i][:, None], on_shape_change='recompile')
-        self.X = DataHolder(X, on_shape_change='recompile')
-        self.Y = DataHolder(Y, on_shape_change='recompile')
+        # for i in xrange(self.num_feat):
+
+        #     self.Xs["X"+str(i)] = DataHolder(X[:, i][:, None], on_shape_change='recompile')
+        X = DataHolder(X, on_shape_change='recompile')
+        Y = DataHolder(Y, on_shape_change='recompile')
         GPModelAdaptiveLengthscale2D.__init__(self, X, Y, kern, nonstat)
         for i in xrange(self.num_feat):
             self.kerns["ell"+str(i)] = self.kern_type
-            self.V["V"+str(i)] = Param(np.zeros((self.num_data, self.num_latent)))
-            self.V["V"+str(i)].prior = Gaussian(0., 1.)
-            # self.Xs["X"+str(i)] = DataHolder(X[:, i][:, None], on_shape_change='recompile')
-        
+            # self.V[i] = Param(np.zeros((self.num_data, self.num_latent)))
+            # self.V["V"+str(i)].prior = Gaussian(0., 1.)        
         # Standard normal dist for NonStat F(.) GP
+        self.V = Param(np.zeros((self.num_data, self.num_feat)))
+        self.V.prior = Gaussian(0., 1.)
         self.V4 = Param(np.zeros((self.num_data, self.num_latent)))
         self.V4.prior = Gaussian(0., 1.)
     
@@ -785,10 +786,12 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         if not self.num_data == self.X.shape[0]:
             self.num_data = self.X.shape[0]
             self.num_feat = self.X.shape[1]
-            self.V = {}
-            for i in xrange(self.num_feat):
-                self.V["V"+str(i)] = Param(np.zeros((self.num_data, self.num_latent)))
-                self.V["V"+str(i)].prior = Gaussian(0., 1.)
+            # self.V = {}
+            # for i in xrange(self.num_feat):
+            #     self.V["V"+str(i)] = Param(np.zeros((self.num_data, self.num_latent)))
+            #     self.V["V"+str(i)].prior = Gaussian(0., 1.)
+            self.V = Param(np.zeros((self.num_data, self.num_feat)))
+            self.V.prior = Gaussian(0., 1.)
             self.V4 = Param(np.zeros((self.num_data, self.num_latent)))
             self.V4.prior = Gaussian(0., 1.)
        
@@ -806,19 +809,22 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         \log p(Y, V1, V2, V3, V4| theta).
         """
         self.Lexp = []
+        K_X_X = tf.ones(shape=[self.num_data, self.num_data], dtype=float_type)
+        Xi_s = tf.split(self.X, num_or_size_splits = self.num_feat, axis = 1)
+        Vi_s = tf.split(self.V, num_or_size_splits = self.num_feat, axis = 1)
         for i in xrange(self.num_feat):
-            print i
-            X_i = self.Xs["X"+str(i)]
-            # import pdb
-            # pdb.set_trace()
+            X_i = Xi_s[i]
+            V_i = Vi_s[i]
             K_i = self.kerns["ell"+str(i)].K(X_i)
             L_i = tf.cholesky(K_i + tf.eye(tf.shape(X_i)[0], dtype=float_type) * 1e-4)
-            Ls_i = tf.matmul(L_i, self.V1)
-            self.Lexp.append(tf.exp(Ls_i))
-        self.Lexp = tf.concat([self.Lexp[i] for i in xrange(len(self.Lexp))], axis=1)
-        assert self.Lexp.shape[0] == self.X.shape[0]
-        assert self.Lexp.shape[1] == self.X.shape[1]        
-        K_X_X = self.nonstat.Kgram(self.X, self.Lexp, self.X, self.Lexp)
+            Ls_i = tf.matmul(L_i, V_i)
+            Ls_i_exp = tf.exp(Ls_i)
+            # self.Lexp.append(tf.exp(Ls_i))
+            # self.Lexp = tf.concat([self.Lexp[i] for i in xrange(len(self.Lexp))], axis=1)
+                    
+            K_X_X = tf.multiply(K_X_X, self.nonstat.K(X_i, Ls_i_exp, X_i, Ls_i_exp))
+        # import pdb
+        # pdb.set_trace()
         # Knonstat1 = self.nonstat.K(self.X1, self.Lexp1, self.X1, self.Lexp1)
         # Knonstat2 = self.nonstat.K(self.X2, self.Lexp2, self.X2, self.Lexp2)
         # Knonstat = Knonstat1 * Knonstat2
