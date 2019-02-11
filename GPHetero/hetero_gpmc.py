@@ -829,8 +829,7 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
             Xnew_i = Xnew_s[i]
             V_i = Vi_s[i]
             mu_i, var_i = conditional(Xnew_i, X_i, self.kerns["ell"+str(i)], V_i,
-                full_cov=full_cov,
-                q_sqrt=None, whiten=True)
+                full_cov=full_cov, q_sqrt=None, whiten=True)
             mu.append(mu_i)
             var.append(var_i)
         return mu, var
