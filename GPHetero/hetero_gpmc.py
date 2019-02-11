@@ -821,9 +821,9 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         """
         mu = []
         var = []
-        Xi_s = tf.split(self.X, num_or_size_splits = self.num_feat, axis = 1)
-        Xnew_s = tf.split(Xnew, num_or_size_splits = self.num_feat, axis = 1)
-        Vi_s = tf.split(self.V, num_or_size_splits = self.num_feat, axis = 1)
+        Xi_s = tf.split(self.X, num_or_size_splits=self.num_feat, axis=1)
+        Xnew_s = tf.split(Xnew, num_or_size_splits=self.num_feat, axis=1)
+        Vi_s = tf.split(self.V, num_or_size_splits=self.num_feat, axis=1)
         for i in xrange(self.num_feat):
             X_i = Xi_s[i]
             Xnew_i = Xnew_s[i]
@@ -838,20 +838,20 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
     def build_predict_f(self, Xnew, full_cov=True):
         """
         Predict GP F(.) at new points Xnew
-        Xnew is a data matrix, point at which we want to predict
-
+        Xnew is a data matrix, point at which we want to predict.
         This method computes
-
-            p(F* | (L=LnonstatV2) )
-
+        p(F* | (L=LnonstatV2) )
         where L* are points on the GP at Xnew, N=L1V1 are points on the GP at X.
-
         """
-        mu, var = nonstat_conditional2D(Xnew, self.X, self.nonstat, self.kern,
-                                        self.V, self.V4, full_cov)
+        mu_ell_X, var_ell_X = self.build_predict_l(self.X)
+        mu_ell_Xnew, var_ell_Xnew = self.build_predict_l(Xnew)
+        mu, var = nonstat_conditional2D(Xnew, self.X, mu_ell_Xnew, var_ell_Xnew, mu_ell_X, var_ell_X,  
+            self.nonstat, self.kerns, self.V, self.V4, full_cov)
+        # mu, var = nonstat_conditional2D(Xnew, self.X, self.nonstat, self.kern,
+        #                                 self.V, self.V4, full_cov)
         return mu, var
 
-#    
+   
 #class GPMCAdaptLAdaptNMultiD(GPModelAdaptLAdaptNMultiD):
 #    """ 
 #    X is a data matrix, size N x D
