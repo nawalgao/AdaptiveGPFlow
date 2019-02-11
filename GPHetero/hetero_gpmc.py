@@ -664,7 +664,6 @@ class GPMCAdaptLAdaptN2D(GPModelAdaptLAdaptN2D):
         Knonstat = Knonstat1*Knonstat2
         Lnonstat = tf.cholesky(Knonstat + tf.eye(tf.shape(self.X)[0], dtype=float_type)*settings.numerics.jitter_level)
         F = tf.matmul(Lnonstat, self.V4)
-        
         return tf.reduce_sum(self.likelihood.logp(F, N, self.Y))
     
     def build_predict_l(self, Xnew, full_cov=False):
@@ -792,7 +791,6 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         log is represented using latent GP L(.)).
         \log p(Y, V1, V2, V3, V4| theta).
         """
-        self.Lexp = []
         K_X_X = tf.ones(shape=[self.num_data, self.num_data], dtype=float_type)
         Xi_s = tf.split(self.X, num_or_size_splits = self.num_feat, axis = 1)
         Vi_s = tf.split(self.V, num_or_size_splits = self.num_feat, axis = 1)
@@ -821,11 +819,22 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         where L* are points on the GP at Xnew, N=L1V1 are points on the GP at X.
 
         """
-        mu, var = conditional(Xnew, self.X, self.kerns, self.V,
-                              full_cov=full_cov,
-                              q_sqrt=None, whiten=True)
+        mu = []
+        var = []
+        Xi_s = tf.split(self.X, num_or_size_splits = self.num_feat, axis = 1)
+        Xnew_s = tf.split(Xnew, num_or_size_splits = self.num_feat, axis = 1)
+        Vi_s = tf.split(self.V, num_or_size_splits = self.num_feat, axis = 1)
+        for i in xrange(self.num_feat):
+            X_i = Xi_s[i]
+            Xnew_i = Xnew_s[i]
+            V_i = Vi_s[i]
+            mu_i, var_i = conditional(Xnew_i, X_i, self.kerns["ell"+str(i)], V_i,
+                full_cov=full_cov,
+                q_sqrt=None, whiten=True)
+            mu.append(mu_i)
+            var.append(var_i)
         return mu, var
-    
+
     
     def build_predict_f(self, Xnew, full_cov=True):
         """
@@ -840,7 +849,7 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
 
         """
         mu, var = nonstat_conditional2D(Xnew, self.X, self.nonstat, self.kern,
-                                      self.V, self.V4, full_cov)
+                                        self.V, self.V4, full_cov)
         return mu, var
 
 #    
