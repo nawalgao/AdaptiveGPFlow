@@ -141,11 +141,9 @@ class NonStationaryLengthscaleRBF(Kern):
         dist_sqr = tf.square(X1 - tf.transpose(X2))
         l_sqr = tf.square(Lexp1) + tf.square(tf.transpose(Lexp2))
         l_2_prod = 2 * Lexp1 * tf.transpose(Lexp2)
-        #var_prod = Sexp1 * tf.transpose(Sexp2)
         var_prod = self.signal_variance
         cov = var_prod * tf.sqrt(l_2_prod / l_sqr) * tf.exp(-1. * dist_sqr / l_sqr)
         return cov
-        #return dist_sqr, l_sqr, l_2_prod , var_prod, cov
     
     @AutoFlow((float_type, [None, None]), (float_type, [None, None]),
               (float_type, [None, None]), (float_type, [None, None]))
