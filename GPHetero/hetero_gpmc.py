@@ -761,14 +761,14 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         self.kerns = {}
         for i in xrange(self.num_feat):
             self.Xs["X"+str(i)] = DataHolder(X[:, i][:, None], on_shape_change='recompile')
+        self.X = DataHolder(X, on_shape_change='recompile')
+        self.Y = DataHolder(Y, on_shape_change='recompile')
         GPModelAdaptiveLengthscale2D.__init__(self, X, Y, kern, nonstat)
         for i in xrange(self.num_feat):
-            self.kerns["ell"+str(i)] = copy(self.kern_type)
+            self.kerns["ell"+str(i)] = self.kern_type
             self.V["V"+str(i)] = Param(np.zeros((self.num_data, self.num_latent)))
             self.V["V"+str(i)].prior = Gaussian(0., 1.)
             # self.Xs["X"+str(i)] = DataHolder(X[:, i][:, None], on_shape_change='recompile')
-        self.X = DataHolder(X, on_shape_change='recompile')
-        self.Y = DataHolder(Y, on_shape_change='recompile')
         
         # Standard normal dist for NonStat F(.) GP
         self.V4 = Param(np.zeros((self.num_data, self.num_latent)))
@@ -807,6 +807,7 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         """
         self.Lexp = []
         for i in xrange(self.num_feat):
+            print i
             X_i = self.Xs["X"+str(i)]
             # import pdb
             # pdb.set_trace()
