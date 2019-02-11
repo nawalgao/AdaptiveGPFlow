@@ -138,7 +138,7 @@ def nonstat_conditional(Xnew, X, nonstat, kern1, v1, v2, full_cov = True):
 
 
 @NameScoped("nonstat_conditional2D")
-def nonstat_conditional2D(Xnew, X, mu_ell_Xnew, var_ell_Xnew, mu_ell_X, var_ell_X, nonstat, kerns, V, V4, full_cov=True):
+def nonstat_conditional2D(Xnew, X, mu_ell_Xnew, mu_ell_X, nonstat, V4, full_cov=True):
     """
     Given F, representing the nonstationary GP (variable lengthscale) at the points X, produce the mean and
     (co-)variance of the GP at the points Xnew.

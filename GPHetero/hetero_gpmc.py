@@ -845,10 +845,8 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         """
         mu_ell_X, var_ell_X = self.build_predict_l(self.X)
         mu_ell_Xnew, var_ell_Xnew = self.build_predict_l(Xnew)
-        mu, var = nonstat_conditional2D(Xnew, self.X, mu_ell_Xnew, var_ell_Xnew, mu_ell_X, var_ell_X,  
-            self.nonstat, self.kerns, self.V, self.V4, full_cov)
-        # mu, var = nonstat_conditional2D(Xnew, self.X, self.nonstat, self.kern,
-        #                                 self.V, self.V4, full_cov)
+        mu, var = nonstat_conditional2D(Xnew, self.X, mu_ell_Xnew, mu_ell_X,  
+            self.nonstat, self.V4, full_cov)
         return mu, var
 
    
