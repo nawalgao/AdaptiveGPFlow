@@ -752,21 +752,22 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         # X2 = X[:,1][:,None]
         # self.X1 = DataHolder(X1, on_shape_change='recompile')
         # self.X2 = DataHolder(X2, on_shape_change='recompile')
-        self.X = DataHolder(X, on_shape_change='recompile')
-        self.Y = DataHolder(Y, on_shape_change='recompile')
-        GPModelAdaptiveLengthscale2D.__init__(self, X, Y, kern, nonstat)
-        
+        self.Xs = {}
         self.num_data = X.shape[0]
         self.num_latent = num_latent or Y.shape[1]
         self.num_feat = X.shape[1]
         # Standard normal dist for num_feat L(.) GP
         self.V = {}
         self.kerns = {}
+        GPModelAdaptiveLengthscale2D.__init__(self, X, Y, kern, nonstat)
         for i in xrange(self.num_feat):
             self.kerns["ell"+str(i)] = copy(self.kern_type)
             self.V["V"+str(i)] = Param(np.zeros((self.num_data, self.num_latent)))
             self.V["V"+str(i)].prior = Gaussian(0., 1.)
-       
+            self.Xs["X"+str(i)] = DataHolder(X[:, i][:, None], on_shape_change='recompile')
+        self.X = DataHolder(X, on_shape_change='recompile')
+        self.Y = DataHolder(Y, on_shape_change='recompile')
+        
         # Standard normal dist for NonStat F(.) GP
         self.V4 = Param(np.zeros((self.num_data, self.num_latent)))
         self.V4.prior = Gaussian(0., 1.)
@@ -804,7 +805,9 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
         """
         self.Lexp = []
         for i in xrange(self.num_feat):
-            X_i = self.X[:, i][:, None]
+            X_i = self.Xs["X"+str(i)]
+            # import pdb
+            # pdb.set_trace()
             K_i = self.kerns["ell"+str(i)].K(X_i)
             L_i = tf.cholesky(K_i + tf.eye(tf.shape(X_i)[0], dtype=float_type) * 1e-4)
             Ls_i = tf.matmul(L_i, self.V1)
