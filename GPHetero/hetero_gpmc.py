@@ -841,7 +841,7 @@ class GPMCAdaptiveLengthscale2D(GPModelAdaptiveLengthscale2D):
             var.append(var_i)
         return mu, var
 
-    def build_predict_n(self, Xnew):
+    def build_predict_n(self, Xnew, full_cov=False):
         """
         Predict latent noise GP n(.) at Xnew.
         """
