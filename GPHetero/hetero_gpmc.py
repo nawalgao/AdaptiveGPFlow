@@ -643,7 +643,11 @@ class GPMCAdaptLAdaptN2D(GPModelAdaptLAdaptN2D):
         log is represented using latent GP L(.)).
         \log p(Y, V1, V2, V3, V4| theta).
         """
-       
+        self.X1, self.X2 = tf.split(self.X, num_or_size_splits = self.num_feat, axis = 0)
+        print self.X1.shape
+           
+        print 'X1:'
+        print self.X1
         K1 = self.kern1.K(self.X1)
         L1 = tf.cholesky(K1 + tf.eye(tf.shape(self.X1)[0], dtype=float_type)*settings.numerics.jitter_level)
         Ls1 = tf.matmul(L1, self.V1)

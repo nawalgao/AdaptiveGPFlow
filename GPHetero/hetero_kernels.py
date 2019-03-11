@@ -192,11 +192,11 @@ if __name__ == '__main__':
     B = np.arange(1,100)[:,None]
     C = np.arange(1,100)[:,None]
     
-    Cov = NonStatLRBFMultiD()
+    Cov = NonStationaryLengthscaleRBF()
     #r = Cov.compute_K(A,A,A,A)
     X = np.random.rand(3,2)
     #K = gpflow.kernels.RBF(input_dim = 2, ARD = True)
-    a = Cov.compute_K(X, X, X, X)
+    a = Cov.compute_K(A, A, A, A)
     
     
     
