@@ -109,8 +109,8 @@ class NonStationaryLengthscaleRBF(Kern):
         dist_sqr = tf.square(X1 - tf.transpose(X2))
         l_sqr = tf.square(Lexp1) + tf.square(tf.transpose(Lexp2))
         l_2_prod = 2. * Lexp1 * tf.transpose(Lexp2)
-        var_prod = self.signal_variance
-        cov = var_prod * tf.sqrt(l_2_prod / l_sqr) * tf.exp(-1. * dist_sqr / l_sqr)
+        # var_prod = self.signal_variance
+        cov = tf.sqrt(l_2_prod / l_sqr) * tf.exp(-1. * dist_sqr / l_sqr)
         return cov
     
     @AutoFlow((float_type, [None, None]), (float_type, [None, None]),
@@ -121,29 +121,16 @@ class NonStationaryLengthscaleRBF(Kern):
 
 if __name__ == '__main__':
     import numpy as np
-<<<<<<< HEAD
-    A = np.arange(2,100)[:,None]
-    B = np.arange(1,100)[:,None]
-    C = np.arange(1,100)[:,None]
-    
-=======
     A = np.arange(2, 100)[:,None]
     B = np.arange(1, 100)[:,None]
     C = np.arange(1, 100)[:,None]
->>>>>>> da0aefa73aa7446b3c39df3dc3b91968ab8fd3fa
     Cov = NonStationaryLengthscaleRBF()
     #r = Cov.compute_K(A,A,A,A)
     X = np.random.rand(3, 2)
     #K = gpflow.kernels.RBF(input_dim = 2, ARD = True)
     a = Cov.compute_K(A, A, A, A)
-<<<<<<< HEAD
-    
-    
-    
-=======
     Cov = NonStatLRBFMultiD()
     #r = Cov.compute_K(A,A,A,A)
     X = np.random.rand(3, 2)
     Cov.compute_Ka(X, X, X, X)
     a = Cov.compute_K(X, X, X, X)
->>>>>>> da0aefa73aa7446b3c39df3dc3b91968ab8fd3fa

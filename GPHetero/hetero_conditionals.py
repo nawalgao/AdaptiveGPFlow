@@ -89,10 +89,10 @@ def conditional_cov(X1, X2, X, mu_ell_X1, mu_ell_X2, mu_ell_X, nonstat, V4):
     Xi_s = tf.split(X, num_or_size_splits=num_feat, axis=1)
     X1i_s = tf.split(X1, num_or_size_splits=num_feat, axis=1)
     X2i_s = tf.split(X2, num_or_size_splits=num_feat, axis=1)
-    K_X_X = tf.ones(shape=[num_data, num_data], dtype=float_type)
-    K_X_X1 = tf.ones(shape=[num_data, num_m1], dtype=float_type)
-    K_X_X2 = tf.ones(shape=[num_data, num_m2], dtype=float_type)
-    K_X1_X2 = tf.ones(shape=[num_m1, num_m2], dtype=float_type)
+    K_X_X = nonstat.signal_variance * tf.ones(shape=[num_data, num_data], dtype=float_type)
+    K_X_X1 = nonstat.signal_variance * tf.ones(shape=[num_data, num_m1], dtype=float_type)
+    K_X_X2 = nonstat.signal_variance * tf.ones(shape=[num_data, num_m2], dtype=float_type)
+    K_X1_X2 = nonstat.signal_variance  * tf.ones(shape=[num_m1, num_m2], dtype=float_type)
     for i in xrange(num_feat):
         X_i = Xi_s[i]
         X1_i  = X1i_s[i]
@@ -124,9 +124,9 @@ def nonstat_conditional_multdim(Xnew, X, mu_ell_Xnew, mu_ell_X, nonstat, V4, ful
     num_func = 1
     Xi_s = tf.split(X, num_or_size_splits=num_feat, axis=1)
     Xnewi_s = tf.split(Xnew, num_or_size_splits=num_feat, axis=1)
-    K_X_X = tf.ones(shape=[num_data, num_data], dtype=float_type)
-    K_X_X_new = tf.ones(shape=[num_data, num_new], dtype=float_type)
-    K_X_new_X_new = tf.ones(shape=[num_new, num_new], dtype=float_type)
+    K_X_X = nonstat.signal_variance * tf.ones(shape=[num_data, num_data], dtype=float_type)
+    K_X_X_new = nonstat.signal_variance * tf.ones(shape=[num_data, num_new], dtype=float_type)
+    K_X_new_X_new = nonstat.signal_variance * tf.ones(shape=[num_new, num_new], dtype=float_type)
     for i in xrange(num_feat):
         X_i = Xi_s[i]
         Xnew_i  = Xnewi_s[i]
