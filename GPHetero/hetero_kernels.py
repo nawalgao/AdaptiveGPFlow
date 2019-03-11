@@ -74,44 +74,26 @@ class Stationary(Kern):
     def Kdiag(self, X, presliced=False):
         return tf.fill(tf.stack([tf.shape(X)[0]]), tf.squeeze(self.variance))
 
-class NonStationaryRBF(Kern):
+class RBF(Stationary):
     """
-    Non-stationary 1D RBF kernel
-    For more info refer to paper:
-        https://arxiv.org/abs/1508.04319
+    The radial basis function (RBF) or squared exponential kernel
     """
-    def __init__(self):
-        Kern.__init__(self, input_dim = 1, active_dims= [0])
-        self.signal_variance = Param(1.0, transform=transforms.positive)
-        
-    def K(self, X1, Lexp1, Sexp1, X2, Lexp2, Sexp2):
-        """
-        X1, X2 : input points
-        Lexp1 and Sexp1 are exponential of latent GPs 
-        L1(.) representing log of non-stationary lengthscale values at points X1 and
-        S1(.) representing log of non-stationary signal variance values at points X1.
-        """
-        dist_sqr = tf.square(X1 - tf.transpose(X2))
-        l_sqr = tf.square(Lexp1) + tf.square(tf.transpose(Lexp2))
-        l_2_prod = 2 * Lexp1 * tf.transpose(Lexp2)
-        var_prod = Sexp1 * tf.transpose(Sexp2)
-        #var_prod = self.signal_variance
-        cov = var_prod * tf.sqrt(l_2_prod/l_sqr) * tf.exp(-1 * dist_sqr/l_sqr)
-        return cov
-        #return dist_sqr, l_sqr, l_2_prod , var_prod, cov
+    def K(self, X, X2=None, presliced=False):
+        if not presliced:
+            X, X2 = self._slice(X, X2)
+        return self.variance * tf.exp(-self.square_dist(X, X2) / 2)
     
     @AutoFlow((float_type, [None, None]), (float_type, [None, None]),
-              (float_type, [None, None]), (float_type, [None, None]),
               (float_type, [None, None]), (float_type, [None, None]))
-    def compute_K(self, X1, Lexp1, Sexp1, X2, Lexp2, Sexp2):
-        return self.K(X1, Lexp1, Sexp1, X2, Lexp2, Sexp2)
 
+    def compute_K(self, X1, X2):
+        return self.K(X1, X2)
 
 class NonStationaryLengthscaleRBF(Kern):
     """
     Non-stationary 1D RBF kernel
     For more info refer to paper:
-        https://arxiv.org/abs/1508.04319
+    https://arxiv.org/abs/1508.04319
     """
     def __init__(self):
         Kern.__init__(self, input_dim = 1, active_dims= [0])
@@ -126,77 +108,42 @@ class NonStationaryLengthscaleRBF(Kern):
         """
         dist_sqr = tf.square(X1 - tf.transpose(X2))
         l_sqr = tf.square(Lexp1) + tf.square(tf.transpose(Lexp2))
-        l_2_prod = 2 * Lexp1 * tf.transpose(Lexp2)
-        #var_prod = Sexp1 * tf.transpose(Sexp2)
+        l_2_prod = 2. * Lexp1 * tf.transpose(Lexp2)
         var_prod = self.signal_variance
-        cov = var_prod * tf.sqrt(l_2_prod/l_sqr) * tf.exp(-1 * dist_sqr/l_sqr)
+        cov = var_prod * tf.sqrt(l_2_prod / l_sqr) * tf.exp(-1. * dist_sqr / l_sqr)
         return cov
-        #return dist_sqr, l_sqr, l_2_prod , var_prod, cov
     
     @AutoFlow((float_type, [None, None]), (float_type, [None, None]),
               (float_type, [None, None]), (float_type, [None, None]))
     def compute_K(self, X1, Lexp1, X2, Lexp2):
         return self.K(X1, Lexp1, X2, Lexp2)
 
-class NonStatLRBFMultiD(NonStationaryLengthscaleRBF):
-    """
-    Non stationary covariance for multi-dimensions
-    """
-    def __init__(self):
-        NonStationaryLengthscaleRBF.__init__(self)
-    
-    def K(self, X1, Lexp1, X2, Lexp2):
-        """
-        X1, X2 : input points
-        Lexp1 and Sexp1 are exponential of latent GPs 
-        L1(.) representing log of non-stationary lengthscale values at points X1.
-        S1(.) representing log of non-stationary signal variance values at points X1.
-        """
-        dist_sqr = tf.square(X1 - tf.transpose(X2))
-        l_sqr = tf.square(Lexp1) + tf.square(tf.transpose(Lexp2))
-        l_2_prod = 2 * Lexp1 * tf.transpose(Lexp2)
-        #var_prod = Sexp1 * tf.transpose(Sexp2)
-        var_prod = self.signal_variance
-        cov = var_prod * tf.sqrt(l_2_prod/l_sqr) * tf.exp(-1 * dist_sqr/l_sqr)
-        return cov
-    
-    def Ka(self, X1mat, Lexpmat1, X2mat, Lexpmat2):
-        """
-        X1mat, X2mat : input feature matrix (N X D)
-        Lexpmat1, Lexpmat2 : latent lengthscale maatrix (N X D)
-        Lexpmat1 : representing log of non-stat lengthscale values for each dimension of X1
-        """
-        num_feat = X1mat.shape[1]
-        num_data = X1mat.shape[0]
-        covmat = tf.placeholder(shape = [num_data, num_data, num_feat], dtype=tf.float32)
-        for i in xrange(num_feat):
-            cov = self.K(X1mat[:,i], Lexpmat1[:,i], X2mat[:,i], Lexpmat1[:,i])
-            covmat[:,:,i] = cov
-        return covmat
-     
-    @AutoFlow((float_type, [None, None]), (float_type, [None, None]),
-              (float_type, [None, None]), (float_type, [None, None]))
-    def compute_Ka(self, X1, Lexp1, X2, Lexp2):
-        return self.K(X1mat, Lexpmat1, Xmat2, Lexpmat2)
-            
-        
-        
-    
-
-def is_pos_def(x):
-    return np.all(np.linalg.eigvals(x) > 0)
 
 if __name__ == '__main__':
     import numpy as np
+<<<<<<< HEAD
     A = np.arange(2,100)[:,None]
     B = np.arange(1,100)[:,None]
     C = np.arange(1,100)[:,None]
     
+=======
+    A = np.arange(2, 100)[:,None]
+    B = np.arange(1, 100)[:,None]
+    C = np.arange(1, 100)[:,None]
+>>>>>>> da0aefa73aa7446b3c39df3dc3b91968ab8fd3fa
     Cov = NonStationaryLengthscaleRBF()
     #r = Cov.compute_K(A,A,A,A)
-    X = np.random.rand(3,2)
+    X = np.random.rand(3, 2)
     #K = gpflow.kernels.RBF(input_dim = 2, ARD = True)
     a = Cov.compute_K(A, A, A, A)
+<<<<<<< HEAD
     
     
     
+=======
+    Cov = NonStatLRBFMultiD()
+    #r = Cov.compute_K(A,A,A,A)
+    X = np.random.rand(3, 2)
+    Cov.compute_Ka(X, X, X, X)
+    a = Cov.compute_K(X, X, X, X)
+>>>>>>> da0aefa73aa7446b3c39df3dc3b91968ab8fd3fa
